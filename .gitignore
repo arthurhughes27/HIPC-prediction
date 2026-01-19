@@ -1,7 +1,7 @@
 # Raw data and results files
 data/
 data-raw/
-output/results/
+output/
 
 # History files
 .Rhistory
