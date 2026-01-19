@@ -18,7 +18,7 @@ hipc_clinical <- readRDS(p_load_clinical)
 hipc_immResp <- readRDS(p_load_immResp)
 
 # Merge together the clinical and immune response dataframes
-merged_hipc_clinical_immresp = full_join(x = hipc_clinical, y = hipc_immResp, by = "participant_id")
+merged_hipc_clinical_immresp = full_join(x = hipc_clinical, y = hipc_immResp, by = c("participant_id", "study_accession"))
 
 
 # Take distinct rows with respect to participant id and timepoint
