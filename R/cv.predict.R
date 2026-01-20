@@ -11,8 +11,7 @@ cv.predict = function(df.predictor.list,
                       model = "lm",
                       n.folds,
                       fold.ids,
-                      seed = 12345){
-  
+                      seed = 12345) {
   set.seed(seed)
   
   ### DATA SELECTION & FEATURE ENGINEERING ###
@@ -28,9 +27,7 @@ cv.predict = function(df.predictor.list,
            all_of(response.col))
   
   # Merge these into one dataframe
-  df.all = right_join(x = df.clinical,
-                      y = df.predictors,
-                      by = "participant_id") %>%
+  df.all = right_join(x = df.clinical, y = df.predictors, by = "participant_id") %>%
     distinct()
   
   
@@ -43,13 +40,37 @@ cv.predict = function(df.predictor.list,
   n <- nrow(df.all)
   p = ncol(df.all) - 2
   
-  if(!is.null(n.folds)){
+  if (!is.null(n.folds)) {
     fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
-  } 
+  }
   
   
   if (model == "lm") {
     res = cv.predict.lm(
+      df = df.all,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = data.selection,
+      feature.engineering.col = feature.engineering.col,
+      feature.engineering.row = feature.engineering.row,
+      feature.selection = feature.selection,
+      model = model,
+      seed = seed
+    )
+  } else if (model == "ranger"){
+    res = cv.predict.ranger(
+      df = df.all,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = data.selection,
+      feature.engineering.col = feature.engineering.col,
+      feature.engineering.row = feature.engineering.row,
+      feature.selection = feature.selection,
+      model = model,
+      seed = seed
+    )
+  } else if (model == "xgboost"){
+    res = cv.predict.xgboost(
       df = df.all,
       fold.ids = fold.ids,
       response.col = response.col,
