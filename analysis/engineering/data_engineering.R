@@ -56,46 +56,38 @@ gene_cols = gene_names
 # timepoint = 1
 
 
-compute_gene_fc = function(df,
-                           id_col,
-                           time_col,
-                           gene_cols,
-                           timepoint){
-  
-  df = df %>% 
+compute_gene_fc = function(df, id_col, time_col, gene_cols, timepoint) {
+  df = df %>%
     arrange(.data[[id_col]])
   
-  df_filtered_baseline = df %>% 
+  df_filtered_baseline = df %>%
     filter(.data[[time_col]] == 0)
   
-  df_filtered_post = df %>% 
+  df_filtered_post = df %>%
     filter(.data[[time_col]] == timepoint)
   
-  participants = intersect(df_filtered_baseline[[id_col]],
-                           df_filtered_post[[id_col]])
+  participants = intersect(df_filtered_baseline[[id_col]], df_filtered_post[[id_col]])
   
-  df_filtered_baseline = df_filtered_baseline %>% 
-    filter(.data[[id_col]] %in% participants) %>% 
+  df_filtered_baseline = df_filtered_baseline %>%
+    filter(.data[[id_col]] %in% participants) %>%
     arrange(.data[[id_col]])
   
-  df_filtered_post = df_filtered_post %>% 
-    filter(.data[[id_col]] %in% participants) %>% 
+  df_filtered_post = df_filtered_post %>%
+    filter(.data[[id_col]] %in% participants) %>%
     arrange(.data[[id_col]])
   
-  expr_baseline = df_filtered_baseline %>% 
-    select(any_of(gene_cols)) %>% 
+  expr_baseline = df_filtered_baseline %>%
+    select(any_of(gene_cols)) %>%
     as.matrix()
   
-  expr_post = df_filtered_post %>% 
-    select(any_of(gene_cols)) %>% 
+  expr_post = df_filtered_post %>%
+    select(any_of(gene_cols)) %>%
     as.matrix()
   
   expr_fc = expr_post - expr_baseline
   
-  result <- cbind(
-    participant_id = df_filtered_post[[id_col]],
-    as.data.frame(expr_fc, stringsAsFactors = FALSE)
-  )
+  result <- cbind(participant_id = df_filtered_post[[id_col]],
+                  as.data.frame(expr_fc, stringsAsFactors = FALSE))
   
   return(result)
 }
@@ -108,30 +100,29 @@ compute_col_transformation = function(df,
                                       gene_cols,
                                       timepoint,
                                       transformation = "none") {
-  
-  df_filtered = df %>% 
+  df_filtered = df %>%
     filter(.data[[time_col]] == timepoint)
   
-  expr_mat = df_filtered %>% 
-    select(any_of(gene_cols)) %>% 
+  expr_mat = df_filtered %>%
+    select(any_of(gene_cols)) %>%
     as.matrix()
   
-  transformation_function = function(col, transformation){
-    if (transformation == "none"){
+  transformation_function = function(col, transformation) {
+    if (transformation == "none") {
       return(col)
-    } else if (transformation == "rank"){
+    } else if (transformation == "rank") {
       return(rank(-col, ties.method = "average"))
-    } else if (transformation == "z"){
-      return(as.numeric(scale(col, center = TRUE, scale = TRUE)))
+    } else if (transformation == "z") {
+      return(as.numeric(scale(
+        col, center = TRUE, scale = TRUE
+      )))
     }
   }
   
   expr_mat_transformed <- apply(expr_mat, 2, FUN = transformation_function, transformation = transformation)
   
-  result <- cbind(
-    participant_id = df_filtered[[id_col]],
-    as.data.frame(expr_mat_transformed, stringsAsFactors = FALSE)
-  )
+  result <- cbind(participant_id = df_filtered[[id_col]],
+                  as.data.frame(expr_mat_transformed, stringsAsFactors = FALSE))
   
   return(result)
 }
@@ -145,21 +136,20 @@ compute_row_transformation = function(df,
                                       geneset_names,
                                       timepoint,
                                       transformation = "mean") {
-  
-  df_filtered = df %>% 
+  df_filtered = df %>%
     filter(.data[[time_col]] == timepoint)
   
-  expr_mat = df_filtered %>% 
-    select(any_of(gene_cols)) %>% 
+  expr_mat = df_filtered %>%
+    select(any_of(gene_cols)) %>%
     as.matrix()
   
-  if (transformation == "none"){
+  if (transformation == "none") {
     transformed_mat = expr_mat
     
     return(transformed_mat)
   }
   
-  if (transformation == "ssgsea"){
+  if (transformation == "ssgsea") {
     names(genesets) <- geneset_names
     suppressMessages(
       params <- ssgseaParam(
@@ -171,7 +161,7 @@ compute_row_transformation = function(df,
       ),
       transformed_mat <- t(gsva(params))
     )
-
+    
     
     transformed_mat <- as.data.frame(transformed_mat, stringsAsFactors = FALSE)
     transformed_mat <- cbind(participant_id = df_filtered[[id_col]], transformed_mat)
@@ -203,7 +193,6 @@ compute_row_transformation = function(df,
   colnames(transformed_mat) = geneset_names
   
   for (i in seq_along(genesets)) {
-    
     gs.genes = intersect(colnames(expr_mat), genesets[[i]])
     
     expr_mat_gs = expr_mat[, gs.genes, drop = FALSE]
@@ -214,7 +203,10 @@ compute_row_transformation = function(df,
       pca_res <- stats::prcomp(expr_mat_gs, center = TRUE, scale. = TRUE)
       transformed <- as.numeric(pca_res$x[, 1])
     } else {
-      transformed <- apply(expr_mat_gs, 1, FUN = transformation_function, transformation = transformation)
+      transformed <- apply(expr_mat_gs,
+                           1,
+                           FUN = transformation_function,
+                           transformation = transformation)
       transformed <- as.numeric(transformed)
     }
     
@@ -241,18 +233,35 @@ apply_transformations = function(df,
   current_gene_cols <- gene_cols
   
   for (step in steps) {
-    if (!is.list(step) || is.null(step$type) || is.null(step$transformation)) {
+    if (!is.list(step) ||
+        is.null(step$type) || is.null(step$transformation)) {
       stop("Each step must be a list with elements $type and $transformation")
     }
     
     if (step$type == "col") {
-      mat <- compute_col_transformation(df_work, id_col, time_col, current_gene_cols, timepoint, transformation = step$transformation)
+      mat <- compute_col_transformation(
+        df_work,
+        id_col,
+        time_col,
+        current_gene_cols,
+        timepoint,
+        transformation = step$transformation
+      )
       # mat already contains participant_id; ensure time_col present for subsequent filtering
       df_work <- as.data.frame(mat, stringsAsFactors = FALSE)
       df_work[[time_col]] <- timepoint
       current_gene_cols <- setdiff(colnames(df_work), c(id_col, time_col))
     } else if (step$type == "row") {
-      res <- compute_row_transformation(df_work, id_col, time_col, current_gene_cols, genesets, geneset_names, timepoint, transformation = step$transformation)
+      res <- compute_row_transformation(
+        df_work,
+        id_col,
+        time_col,
+        current_gene_cols,
+        genesets,
+        geneset_names,
+        timepoint,
+        transformation = step$transformation
+      )
       df_work <- as.data.frame(res, stringsAsFactors = FALSE)
       df_work[[time_col]] <- timepoint
       current_gene_cols <- setdiff(colnames(df_work), c(id_col, time_col))
@@ -267,37 +276,38 @@ apply_transformations = function(df,
 }
 
 
-d0 = hipc_merged_young_norm_filtered %>% 
-  filter(study_time_collected == 0) %>% 
-  select(participant_id,
-         any_of(gene_names))
+d0 = hipc_merged_young_norm_filtered %>%
+  filter(study_time_collected == 0) %>%
+  select(participant_id, any_of(gene_names))
 
-d1 = hipc_merged_young_norm_filtered %>% 
-  filter(study_time_collected == 1) %>% 
-  select(participant_id,
-         any_of(gene_names))
+d1 = hipc_merged_young_norm_filtered %>%
+  filter(study_time_collected == 1) %>%
+  select(participant_id, any_of(gene_names))
 
-d3 = hipc_merged_young_norm_filtered %>% 
-  filter(study_time_collected == 3) %>% 
-  select(participant_id,
-         any_of(gene_names))
+d3 = hipc_merged_young_norm_filtered %>%
+  filter(study_time_collected == 3) %>%
+  select(participant_id, any_of(gene_names))
 
 
 col_transformations <- c("none", "z", "rank")   # matches compute_col_transformation's accepted strings
 row_transformations <- c("none", "mean", "median", "max", "iqr", "cv", "ssgsea", "pc1")
 
 # precompute fold-change tables (these lack the time column; we'll add it before passing to functions)
-d1fc <- compute_gene_fc(df = hipc_merged_young_norm_filtered,
-                        id_col = id_col,
-                        time_col = time_col,
-                        gene_cols = gene_cols,
-                        timepoint = 1)
+d1fc <- compute_gene_fc(
+  df = hipc_merged_young_norm_filtered,
+  id_col = id_col,
+  time_col = time_col,
+  gene_cols = gene_cols,
+  timepoint = 1
+)
 
-d3fc <- compute_gene_fc(df = hipc_merged_young_norm_filtered,
-                        id_col = id_col,
-                        time_col = time_col,
-                        gene_cols = gene_cols,
-                        timepoint = 3)
+d3fc <- compute_gene_fc(
+  df = hipc_merged_young_norm_filtered,
+  id_col = id_col,
+  time_col = time_col,
+  gene_cols = gene_cols,
+  timepoint = 3
+)
 
 # add a time column so the existing functions (which filter by timepoint) work with these dfs
 d1fc_time <- d1fc
@@ -311,8 +321,8 @@ sources <- list(
   d0   = list(df = hipc_merged_young_norm_filtered, tp = 0L),
   d1   = list(df = hipc_merged_young_norm_filtered, tp = 1L),
   d3   = list(df = hipc_merged_young_norm_filtered, tp = 3L),
-  d1fc = list(df = d1fc_time,                      tp = 1L),
-  d3fc = list(df = d3fc_time,                      tp = 3L)
+  d1fc = list(df = d1fc_time, tp = 1L),
+  d3fc = list(df = d3fc_time, tp = 3L)
 )
 
 engineered <- list()
@@ -333,11 +343,22 @@ for (top_name in names(sources)) {
       # build steps according to the rule:
       steps <- list()
       if (row_tf %in% c("ssgsea", "pc1")) {
-        steps <- append(steps, list(list(type = "row", transformation = row_tf)))
-        if (col_tf != "none") steps <- append(steps, list(list(type = "col", transformation = col_tf)))
+        steps <- append(steps, list(list(
+          type = "row", transformation = row_tf
+        )))
+        if (col_tf != "none")
+          steps <- append(steps, list(list(
+            type = "col", transformation = col_tf
+          )))
       } else {
-        if (col_tf != "none") steps <- append(steps, list(list(type = "col", transformation = col_tf)))
-        if (row_tf != "none") steps <- append(steps, list(list(type = "row", transformation = row_tf)))
+        if (col_tf != "none")
+          steps <- append(steps, list(list(
+            type = "col", transformation = col_tf
+          )))
+        if (row_tf != "none")
+          steps <- append(steps, list(list(
+            type = "row", transformation = row_tf
+          )))
       }
       
       res_df <- apply_transformations(
@@ -362,5 +383,4 @@ p_save <- fs::path(processed_data_folder,
                    "engineered_dataframes_influenzain.rds")
 
 # Save the data
-saveRDS(engineered,
-        p_save)
+saveRDS(engineered, p_save)
