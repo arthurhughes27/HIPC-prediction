@@ -18,20 +18,21 @@ hipc_clinical <- readRDS(p_load_clinical)
 hipc_immResp <- readRDS(p_load_immResp)
 
 # Merge together the clinical and immune response dataframes
-merged_hipc_clinical_immresp = full_join(x = hipc_clinical, y = hipc_immResp, by = c("participant_id", "study_accession"))
+hipc_merged_clinical_immresp = full_join(x = hipc_clinical, y = hipc_immResp, by = c("participant_id", "study_accession"))
 
 
 # Take distinct rows with respect to participant id and timepoint
 
-merged_hipc_clinical_immresp  = merged_hipc_clinical_immresp %>%
-  distinct(participant_id, study_time_collected, .keep_all = T)
+hipc_merged_clinical_immresp  = hipc_merged_clinical_immresp %>%
+  distinct(participant_id, study_time_collected, .keep_all = T) %>% 
+  mutate(genderMale = ifelse(gender == "Male", 1, 0))
 
 expr_young_norm  = expr_young_norm %>%
   distinct(participant_id, study_time_collected, .keep_all = T)
 
 # Now we can merge these dataframes together by pid and study time
 hipc_merged_young_norm = right_join(
-  x = merged_hipc_clinical_immresp,
+  x = hipc_merged_clinical_immresp,
   y = expr_young_norm,
   by = c("participant_id", "study_time_collected")
 )
@@ -77,9 +78,10 @@ processed_data_folder = "data"
 
 # Use fs::path() to specify the data path robustly
 p_save_young_norm <- fs::path(processed_data_folder, "hipc_merged_young_norm.rds")
-
+p_save_clinical_immresp <- fs::path(processed_data_folder, "hipc_merged_clinical_immresp.rds")
 
 # Save dataframe
 saveRDS(hipc_merged_young_norm, file = p_save_young_norm)
+saveRDS(hipc_merged_clinical_immresp, file = p_save_clinical_immresp)
 
 rm(list = ls())
