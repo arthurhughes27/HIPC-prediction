@@ -7,12 +7,12 @@ cv.predict.ranger = function(df,
                              feature.engineering.col,
                              feature.engineering.row,
                              feature.selection,
-                             model,
                              seed = 12345,
                              n.folds.inner = 5,
                              num.trees = 500,
                              mtry.values = NULL,
-                             min.node.size.values = c(1, 5)) {
+                             min.node.size.values = c(1, 5),
+                             baseline = FALSE) {
   # Set seed
   set.seed(seed)
   
@@ -26,26 +26,24 @@ cv.predict.ranger = function(df,
   p = length(pred.names)
   
   # Outer folds
-  if (!is.null(n.folds)) {
-    # If number of folds provided, generate fold ids
-    fold.ids = sample(rep(seq_len(n.folds), length.out = n))
-  } else {
-    # Else set number of folds
+  if (!is.null(fold.ids)) {
     n.folds = length(unique(fold.ids))
+  } else {
+    fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
   }
   
   # defaults for tuning grid if not provided
   if (is.null(mtry.values)) {
     vals = unique(floor(c(sqrt(p), p / 3, p / 2)))
     vals = vals[vals >= 1 &
-                   vals <= p] # Ensure mtry is between 1 and the number of predictors
+                  vals <= p] # Ensure mtry is between 1 and the number of predictors
     if (length(vals) == 0) {
       vals = min(1, p)
     }
     mtry.values = vals
   } else {
     mtry.values = mtry.values[mtry.values >= 1 &
-                                 mtry.values <= p] # Ensure mtry is between 1 and the number of predictors
+                                mtry.values <= p] # Ensure mtry is between 1 and the number of predictors
   }
   
   # Set minimum node size grid
@@ -144,33 +142,48 @@ cv.predict.ranger = function(df,
   observed = df %>% select(all_of(response.col)) %>% as.matrix()
   # Save predicted vs observed values
   predictions = data.frame("observed" = as.numeric(observed),
-                            "predicted" = as.numeric(pred.vec))
+                           "predicted" = as.numeric(pred.vec))
   colnames(predictions) = c("observed", "predicted")
   
   # Compute metrics
   R2 = cor(predictions$observed, predictions$predicted, use = "complete.obs")^2
   R.spearman = cor(predictions$observed,
-                    predictions$predicted,
-                    method = "spearman",
-                    use = "complete.obs")
+                   predictions$predicted,
+                   method = "spearman",
+                   use = "complete.obs")
   RMSE = sqrt(mean((
     predictions$observed - predictions$predicted
   )^2, na.rm = TRUE))
   sRMSE = RMSE / sd(predictions$observed, na.rm = TRUE)
   
   # Store metrics
-  metrics = data.frame(
-    "data.selection" = data.selection,
-    "feature.engineering.col" = feature.engineering.col,
-    "feature.engineering.row" = feature.engineering.row,
-    "feature.selection" = feature.selection,
-    "model" = model,
-    "R2" = R2,
-    "R.spearman" = R.spearman,
-    "RMSE" = RMSE,
-    "sRMSE" = sRMSE,
-    stringsAsFactors = FALSE
-  )
+  if (baseline) {
+    metrics <- data.frame(
+      "data.selection" = "baseline",
+      "feature.engineering.col" = "baseline",
+      "feature.engineering.row" = "baseline",
+      "feature.selection" = "baseline",
+      "model" = "ranger",
+      "R2" = R2,
+      "R.spearman" = R.spearman,
+      "RMSE" = RMSE,
+      "sRMSE" = sRMSE,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    metrics <- data.frame(
+      "data.selection" = data.selection,
+      "feature.engineering.col" = feature.engineering.col,
+      "feature.engineering.row" = feature.engineering.row,
+      "feature.selection" = feature.selection,
+      "model" = "ranger",
+      "R2" = R2,
+      "R.spearman" = R.spearman,
+      "RMSE" = RMSE,
+      "sRMSE" = sRMSE,
+      stringsAsFactors = FALSE
+    )
+  }
   
   # Store mean variable importance
   varImp = data.frame(

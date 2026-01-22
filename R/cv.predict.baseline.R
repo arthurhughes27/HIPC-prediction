@@ -1,0 +1,65 @@
+# Function to derive cross-validation predictions according to a given specification
+
+cv.predict.baseline = function(df,
+                               predictor.cols,
+                               response.col,
+                               model = "lm",
+                               n.folds = NULL,
+                               fold.ids = NULL,
+                               seed = 12345) {
+  set.seed(seed)
+  
+  ### CROSS-VALIDATION ###
+  
+  # Randomise folds
+  
+  n <- nrow(df)
+  p = length(predictor.cols)
+  
+  if (!is.null(fold.ids)) {
+    n.folds = NULL
+  } else {
+    fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
+  }
+  
+  
+  if (model == "lm") {
+    res = cv.predict.lm(
+      df = df,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = "placeholder",
+      feature.engineering.col = "placeholder",
+      feature.engineering.row = "placeholder",
+      feature.selection = "placeholder",
+      seed = seed,
+      baseline = TRUE
+    )
+  } else if (model == "ranger") {
+    res = cv.predict.ranger(
+      df = df,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = "placeholder",
+      feature.engineering.col = "placeholder",
+      feature.engineering.row = "placeholder",
+      feature.selection = "placeholder",
+      seed = seed,
+      baseline = TRUE
+    )
+  } else if (model == "xgboost") {
+    res = cv.predict.xgboost(
+      df = df,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = "placeholder",
+      feature.engineering.col = "placeholder",
+      feature.engineering.row = "placeholder",
+      feature.selection = "placeholder",
+      seed = seed,
+      baseline = TRUE
+    )
+  }
+  
+  return(res)
+}

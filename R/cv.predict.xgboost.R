@@ -7,22 +7,22 @@ cv.predict.xgboost = function(df,
                               feature.engineering.col,
                               feature.engineering.row,
                               feature.selection,
-                              model,
                               seed = 12345,
                               n.folds.inner = 5,
                               nrounds = 100,
                               eta.values = c(0.01, 0.1),
                               max.depth.values = c(3, 6),
                               subsample.values = 1,
-                              colsample.values = 1) {
+                              colsample.values = 1,
+                              baseline = FALSE) {
   set.seed(seed)
   n <- nrow(df)
   pred.names <- setdiff(colnames(df), c("participant_id", response.col))
   p <- length(pred.names)
-  if (!is.null(n.folds)) {
-    fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
+  if (!is.null(fold.ids)) {
+    n.folds = length(unique(fold.ids))
   } else {
-    n.folds <- length(unique(fold.ids))
+    fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
   }
   pred.vec <- rep(NA_real_, n)
   var.imp <- matrix(NA_real_, nrow = p, ncol = n.folds)
@@ -147,18 +147,33 @@ cv.predict.xgboost = function(df,
   )^2, na.rm = TRUE))
   sRMSE <- RMSE / sd(predictions$observed, na.rm = TRUE)
   
-  metrics <- data.frame(
-    "data.selection" = data.selection,
-    "feature.engineering.col" = feature.engineering.col,
-    "feature.engineering.row" = feature.engineering.row,
-    "feature.selection" = feature.selection,
-    "model" = model,
-    "R2" = R2,
-    "R.spearman" = R.spearman,
-    "RMSE" = RMSE,
-    "sRMSE" = sRMSE,
-    stringsAsFactors = FALSE
-  )
+  if (baseline) {
+    metrics <- data.frame(
+      "data.selection" = "baseline",
+      "feature.engineering.col" = "baseline",
+      "feature.engineering.row" = "baseline",
+      "feature.selection" = "baseline",
+      "model" = "xgboost",
+      "R2" = R2,
+      "R.spearman" = R.spearman,
+      "RMSE" = RMSE,
+      "sRMSE" = sRMSE,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    metrics <- data.frame(
+      "data.selection" = data.selection,
+      "feature.engineering.col" = feature.engineering.col,
+      "feature.engineering.row" = feature.engineering.row,
+      "feature.selection" = feature.selection,
+      "model" = "xgboost",
+      "R2" = R2,
+      "R.spearman" = R.spearman,
+      "RMSE" = RMSE,
+      "sRMSE" = sRMSE,
+      stringsAsFactors = FALSE
+    )
+  }
   
   varImp <- data.frame(
     var = rownames(var.imp),

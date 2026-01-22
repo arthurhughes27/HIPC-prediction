@@ -7,16 +7,16 @@ cv.predict.lm = function(df,
                          feature.engineering.col,
                          feature.engineering.row,
                          feature.selection,
-                         model,
-                         seed = 12345) {
+                         seed = 12345,
+                         baseline = FALSE) {
   set.seed(seed)
   n <- nrow(df)
   pred.names <- setdiff(colnames(df), c("participant_id", response.col))
   p <- length(pred.names)
-  if (!is.null(n.folds)) {
-    fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
+  if (!is.null(fold.ids)) {
+    n.folds = length(unique(fold.ids))
   } else {
-    n.folds <- length(unique(fold.ids))
+    fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
   }
   pred.vec <- rep(NA_real_, n)
   var.imp <- matrix(NA_real_, nrow = p, ncol = n.folds)
@@ -26,7 +26,12 @@ cv.predict.lm = function(df,
     df.test  <- df[fold.ids == fold, , drop = FALSE]
     predictor_names <- intersect(pred.names, colnames(df.train))
     predictor.cols.safe <- paste0("`", predictor_names, "`")
-    form <- as.formula(paste0("`", response.col, "` ~ ", paste(predictor.cols.safe, collapse = " + ")))
+    form <- as.formula(paste0(
+      "`",
+      response.col,
+      "` ~ ",
+      paste(predictor.cols.safe, collapse = " + ")
+    ))
     fit <- lm(form, data = df.train)
     preds.outer <- predict(fit, newdata = df.test)
     pred.vec[fold.ids == fold] <- as.numeric(preds.outer)
@@ -35,28 +40,51 @@ cv.predict.lm = function(df,
     var.names <- rownames(var.imp)
     for (v in names(coefs)) {
       v.clean <- gsub("`", "", v)
-      if (v.clean %in% var.names) var.imp[v.clean, fold] <- coefs[v]
+      if (v.clean %in% var.names)
+        var.imp[v.clean, fold] <- coefs[v]
     }
   }
   observed <- df %>% select(all_of(response.col)) %>% as.matrix()
-  predictions <- data.frame("observed" = as.numeric(observed), "predicted" = as.numeric(pred.vec))
+  predictions <- data.frame("observed" = as.numeric(observed),
+                            "predicted" = as.numeric(pred.vec))
   colnames(predictions) <- c("observed", "predicted")
   R2 <- cor(predictions$observed, predictions$predicted, use = "complete.obs")^2
-  R.spearman <- cor(predictions$observed, predictions$predicted, method = "spearman", use = "complete.obs")
-  RMSE <- sqrt(mean((predictions$observed - predictions$predicted)^2, na.rm = TRUE))
+  R.spearman <- cor(predictions$observed,
+                    predictions$predicted,
+                    method = "spearman",
+                    use = "complete.obs")
+  RMSE <- sqrt(mean((
+    predictions$observed - predictions$predicted
+  )^2, na.rm = TRUE))
   sRMSE <- RMSE / sd(predictions$observed, na.rm = TRUE)
-  metrics <- data.frame(
-    "data.selection" = data.selection,
-    "feature.engineering.col" = feature.engineering.col,
-    "feature.engineering.row" = feature.engineering.row,
-    "feature.selection" = feature.selection,
-    "model" = model,
-    "R2" = R2,
-    "R.spearman" = R.spearman,
-    "RMSE" = RMSE,
-    "sRMSE" = sRMSE,
-    stringsAsFactors = FALSE
-  )
+  
+  if (baseline) {
+    metrics <- data.frame(
+      "data.selection" = "baseline",
+      "feature.engineering.col" = "baseline",
+      "feature.engineering.row" = "baseline",
+      "feature.selection" = "baseline",
+      "model" = "lm",
+      "R2" = R2,
+      "R.spearman" = R.spearman,
+      "RMSE" = RMSE,
+      "sRMSE" = sRMSE,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    metrics <- data.frame(
+      "data.selection" = data.selection,
+      "feature.engineering.col" = feature.engineering.col,
+      "feature.engineering.row" = feature.engineering.row,
+      "feature.selection" = feature.selection,
+      "model" = "lm",
+      "R2" = R2,
+      "R.spearman" = R.spearman,
+      "RMSE" = RMSE,
+      "sRMSE" = sRMSE,
+      stringsAsFactors = FALSE
+    )
+  }
   varImp <- data.frame(
     var = rownames(var.imp),
     meanImp = rowMeans(var.imp, na.rm = TRUE),
