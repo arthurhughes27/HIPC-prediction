@@ -97,7 +97,8 @@ cv.predict = function(df.predictor.list,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
-      seed = seed
+      seed = seed,
+      n.cores = n.cores
     )
   } else if (model == "elasticnet"){
     res = cv.predict.elasticnet(
@@ -108,7 +109,8 @@ cv.predict = function(df.predictor.list,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
-      seed = seed
+      seed = seed,
+      n.cores = n.cores
     )
   }
   

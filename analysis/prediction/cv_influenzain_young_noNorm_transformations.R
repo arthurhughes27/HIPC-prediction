@@ -20,7 +20,8 @@ output_folder = fs::path("output", "results")
 df.predictor.list.path = fs::path(processed_data_folder,
                                   "engineered_dataframes_influenzain_young_noNorm.rds")
 # Path for clinical
-df.clinical.path = fs::path(processed_data_folder, "hipc_merged_clinical_immresp_young_noNorm.rds")
+df.clinical.path = fs::path(processed_data_folder,
+                            "hipc_merged_clinical_immresp_young_noNorm.rds")
 
 # Load the data
 df.predictor.list = readRDS(df.predictor.list.path)
@@ -37,7 +38,7 @@ response.col = "immResp_MFC_hai_log2_post_value"
 # Fix the feature selection algorithm
 feature.selection = "none"
 # Fix the predictive model
-model = "elasticnet"
+model = "xgboost"
 # Set the seed
 seed = 21012026
 
@@ -106,14 +107,14 @@ for (mod in c("elasticnet", "xgboost", "ranger")) {
           model = mod,
           fold.ids = fold.ids,
           seed = seed,
-          n.cores = 11
+          n.cores = 12
         )
         
         out.time = Sys.time()
         
-        diff.time = out.time - in.time
+        diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
         
-        message(round(diff.time, 1), " mins elapsed.")
+        message(sprintf("Completed in %.1f mins.", diff.time))
         
         
         # Store the metrics
@@ -147,7 +148,7 @@ fold.ids = fold_df %>%
   pull(fold)
 
 # Compute the cross-validation results
-for (mod in c("lm","xgboost", "ranger", "elasticnet")){
+for (mod in c("lm", "xgboost", "ranger", "elasticnet")) {
   baseline_results = cv.predict.baseline(
     df = df,
     predictor.cols = covariate.cols,
@@ -163,6 +164,7 @@ for (mod in c("lm","xgboost", "ranger", "elasticnet")){
 }
 
 # Path to save the results
-p_save <- fs::path(output_folder, "metrics_transformations_allmodels_young_noNorm.rds")
+p_save <- fs::path(output_folder,
+                   "metrics_transformations_allmodels_young_noNorm.rds")
 # Save the results
 saveRDS(metrics.df, p_save)

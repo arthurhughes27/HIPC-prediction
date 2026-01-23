@@ -106,14 +106,14 @@ for (mod in c("xgboost", "ranger", "elasticnet")) {
           model = mod,
           fold.ids = fold.ids,
           seed = seed,
-          n.cores = 11
+          n.cores = 12
         )
         
         out.time = Sys.time()
         
-        diff.time = out.time - in.time
+        diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
         
-        message(round(diff.time, 1), " mins elapsed.")
+        message(sprintf("Completed in %.1f mins.", diff.time))
         
         
         # Store the metrics

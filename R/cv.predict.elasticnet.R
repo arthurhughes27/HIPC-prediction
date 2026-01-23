@@ -11,7 +11,8 @@ cv.predict.elasticnet = function(df,
                                  n.folds.inner = 5,
                                  alpha.values = seq(0,1,0.1),
                                  nlambda = 10,
-                                 baseline = FALSE) {
+                                 baseline = FALSE,
+                                 n.cores = 1) {
   set.seed(seed)
   n <- nrow(df)
   pred.names <- setdiff(colnames(df), c("participant_id", response.col))
@@ -25,6 +26,15 @@ cv.predict.elasticnet = function(df,
   var.imp <- matrix(NA_real_, nrow = p, ncol = n.folds)
   rownames(var.imp) <- pred.names
   
+  # parallel backend setup
+  parallel_backend <- FALSE
+  n.cores <- as.integer(n.cores)
+  if (n.cores > 1) {
+    cl <- parallel::makeCluster(n.cores)
+    doParallel::registerDoParallel(cl)
+    parallel_backend <- TRUE
+  }
+  
   for (fold in seq_len(n.folds)) {
     df.train <- df[fold.ids != fold, , drop = FALSE]
     df.test  <- df[fold.ids == fold, , drop = FALSE]
@@ -33,24 +43,59 @@ cv.predict.elasticnet = function(df,
     best.params <- list(alpha = alpha.values[1], lambda = NULL)
     set.seed(seed + fold)
     
-    for (alpha.val in alpha.values) {
-      x.train <- data.matrix(df.train[, pred.names, drop = FALSE])
-      y.train <- as.numeric(df.train[[response.col]])
-      cvfit <- glmnet::cv.glmnet(x = x.train,
-                                 y = y.train,
-                                 alpha = alpha.val,
-                                 nfolds = n.folds.inner,
-                                 nlambda = nlambda,
-                                 type.measure = "mse",
-                                 standardize = TRUE,
-                                 intercept = TRUE)
-      idx <- which.min(abs(cvfit$lambda - cvfit$lambda.min))
-      mse <- cvfit$cvm[idx]
-      rmse <- sqrt(mse)
-      if (is.finite(rmse) && rmse < best.rmse) {
-        best.rmse <- rmse
-        best.params$alpha <- alpha.val
-        best.params$lambda <- cvfit$lambda.min
+    if (parallel_backend) {
+      res_alpha <- foreach::foreach(i = seq_along(alpha.values),
+                                    .combine = rbind,
+                                    .packages = "glmnet") %dopar% {
+                                      alpha.val <- alpha.values[i]
+                                      set.seed(seed + fold + i)
+                                      x.train <- data.matrix(df.train[, pred.names, drop = FALSE])
+                                      y.train <- as.numeric(df.train[[response.col]])
+                                      cvfit <- glmnet::cv.glmnet(x = x.train,
+                                                                 y = y.train,
+                                                                 alpha = alpha.val,
+                                                                 nfolds = n.folds.inner,
+                                                                 nlambda = nlambda,
+                                                                 type.measure = "mse",
+                                                                 standardize = TRUE,
+                                                                 intercept = TRUE)
+                                      idx <- which.min(abs(cvfit$lambda - cvfit$lambda.min))
+                                      mse <- cvfit$cvm[idx]
+                                      rmse <- sqrt(mse)
+                                      c(alpha = alpha.val, rmse = rmse, lambda = cvfit$lambda.min)
+                                    }
+      if (is.matrix(res_alpha) && nrow(res_alpha) > 0) {
+        for (r in seq_len(nrow(res_alpha))) {
+          alpha.val <- as.numeric(res_alpha[r, "alpha"])
+          rmse <- as.numeric(res_alpha[r, "rmse"])
+          lambda.val <- as.numeric(res_alpha[r, "lambda"])
+          if (is.finite(rmse) && rmse < best.rmse) {
+            best.rmse <- rmse
+            best.params$alpha <- alpha.val
+            best.params$lambda <- lambda.val
+          }
+        }
+      }
+    } else {
+      for (alpha.val in alpha.values) {
+        x.train <- data.matrix(df.train[, pred.names, drop = FALSE])
+        y.train <- as.numeric(df.train[[response.col]])
+        cvfit <- glmnet::cv.glmnet(x = x.train,
+                                   y = y.train,
+                                   alpha = alpha.val,
+                                   nfolds = n.folds.inner,
+                                   nlambda = nlambda,
+                                   type.measure = "mse",
+                                   standardize = TRUE,
+                                   intercept = TRUE)
+        idx <- which.min(abs(cvfit$lambda - cvfit$lambda.min))
+        mse <- cvfit$cvm[idx]
+        rmse <- sqrt(mse)
+        if (is.finite(rmse) && rmse < best.rmse) {
+          best.rmse <- rmse
+          best.params$alpha <- alpha.val
+          best.params$lambda <- cvfit$lambda.min
+        }
       }
     }
     
@@ -79,6 +124,12 @@ cv.predict.elasticnet = function(df,
     vi_max <- max(vi, na.rm = TRUE)
     if (is.finite(vi_max) && vi_max > 0) vi <- vi / vi_max else vi[] <- NA_real_
     for (v in names(vi)) if (v %in% rownames(var.imp)) var.imp[v, fold] <- vi[[v]]
+  }
+  
+  # parallel backend teardown
+  if (parallel_backend) {
+    parallel::stopCluster(cl)
+    foreach::registerDoSEQ()
   }
   
   observed <- df %>% select(all_of(response.col)) %>% as.matrix()
