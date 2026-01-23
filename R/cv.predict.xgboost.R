@@ -14,7 +14,8 @@ cv.predict.xgboost = function(df,
                               max.depth.values = c(3, 6),
                               subsample.values = 1,
                               colsample.values = 1,
-                              baseline = FALSE) {
+                              baseline = FALSE,
+                              n.cores = 1) {
   set.seed(seed)
   n <- nrow(df)
   pred.names <- setdiff(colnames(df), c("participant_id", response.col))
@@ -27,6 +28,16 @@ cv.predict.xgboost = function(df,
   pred.vec <- rep(NA_real_, n)
   var.imp <- matrix(NA_real_, nrow = p, ncol = n.folds)
   rownames(var.imp) <- pred.names
+  
+  # --- parallel backend setup ---
+  parallel_backend <- FALSE
+  n.cores <- as.integer(n.cores)
+  if (n.cores > 1) {
+    cl <- parallel::makeCluster(n.cores)
+    doParallel::registerDoParallel(cl)
+    parallel_backend <- TRUE
+  }
+  # -------------------------------
   
   for (fold in seq_len(n.folds)) {
     df.train <- df[fold.ids != fold, , drop = FALSE]
@@ -47,33 +58,69 @@ cv.predict.xgboost = function(df,
       for (md in max.depth.values) {
         for (ss in subsample.values) {
           for (cs in colsample.values) {
-            inner.rmses <- numeric(n.folds.inner)
-            for (ifold in seq_len(n.folds.inner)) {
-              inner.train <- df.train[inner.fold.ids != ifold, , drop = FALSE]
-              inner.test  <- df.train[inner.fold.ids == ifold, , drop = FALSE]
-              dtrain <- xgboost::xgb.DMatrix(data = data.matrix(inner.train[, pred.names, drop = FALSE]),
-                                             label = as.numeric(inner.train[[response.col]]))
-              dtest  <- xgboost::xgb.DMatrix(data = data.matrix(inner.test[, pred.names, drop = FALSE]),
-                                             label = as.numeric(inner.test[[response.col]]))
-              params <- list(
-                objective = "reg:squarederror",
-                eta = eta.val,
-                max_depth = md,
-                subsample = ss,
-                colsample_bytree = cs,
-                seed = seed + fold + ifold,
-                verbosity = 0
-              )
-              xgb.fit <- xgboost::xgb.train(
-                params = params,
-                data = dtrain,
-                nrounds = nrounds,
-                verbose = 0
-              )
-              preds.inner <- as.numeric(predict(xgb.fit, dtest))
-              obs.inner <- as.numeric(inner.test[[response.col]])
-              inner.rmses[ifold] <- sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+            # --- inner CV (parallel if requested) ---
+            if (parallel_backend) {
+              inner.rmses <- foreach::foreach(ifold = seq_len(n.folds.inner),
+                                              .combine = c,
+                                              .packages = "xgboost") %dopar% {
+                                                set.seed(seed + fold + ifold)
+                                                inner.train <- df.train[inner.fold.ids != ifold, , drop = FALSE]
+                                                inner.test  <- df.train[inner.fold.ids == ifold, , drop = FALSE]
+                                                dtrain <- xgboost::xgb.DMatrix(data = data.matrix(inner.train[, pred.names, drop = FALSE]),
+                                                                               label = as.numeric(inner.train[[response.col]]))
+                                                dtest  <- xgboost::xgb.DMatrix(data = data.matrix(inner.test[, pred.names, drop = FALSE]),
+                                                                               label = as.numeric(inner.test[[response.col]]))
+                                                params <- list(
+                                                  objective = "reg:squarederror",
+                                                  eta = eta.val,
+                                                  max_depth = md,
+                                                  subsample = ss,
+                                                  colsample_bytree = cs,
+                                                  seed = seed + fold + ifold,
+                                                  verbosity = 0
+                                                )
+                                                xgb.fit <- xgboost::xgb.train(
+                                                  params = params,
+                                                  data = dtrain,
+                                                  nrounds = nrounds,
+                                                  verbose = 0,
+                                                  nthread = 1
+                                                )
+                                                preds.inner <- as.numeric(predict(xgb.fit, dtest))
+                                                obs.inner <- as.numeric(inner.test[[response.col]])
+                                                sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+                                              }
+            } else {
+              inner.rmses <- numeric(n.folds.inner)
+              for (ifold in seq_len(n.folds.inner)) {
+                inner.train <- df.train[inner.fold.ids != ifold, , drop = FALSE]
+                inner.test  <- df.train[inner.fold.ids == ifold, , drop = FALSE]
+                dtrain <- xgboost::xgb.DMatrix(data = data.matrix(inner.train[, pred.names, drop = FALSE]),
+                                               label = as.numeric(inner.train[[response.col]]))
+                dtest  <- xgboost::xgb.DMatrix(data = data.matrix(inner.test[, pred.names, drop = FALSE]),
+                                               label = as.numeric(inner.test[[response.col]]))
+                params <- list(
+                  objective = "reg:squarederror",
+                  eta = eta.val,
+                  max_depth = md,
+                  subsample = ss,
+                  colsample_bytree = cs,
+                  seed = seed + fold + ifold,
+                  verbosity = 0
+                )
+                xgb.fit <- xgboost::xgb.train(
+                  params = params,
+                  data = dtrain,
+                  nrounds = nrounds,
+                  verbose = 0,
+                  nthread = 1
+                )
+                preds.inner <- as.numeric(predict(xgb.fit, dtest))
+                obs.inner <- as.numeric(inner.test[[response.col]])
+                inner.rmses[ifold] <- sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+              }
             }
+            # --------------------------------------------
             mean.rmse <- mean(inner.rmses, na.rm = TRUE)
             if (is.finite(mean.rmse) && mean.rmse < best.rmse) {
               best.rmse <- mean.rmse
@@ -104,7 +151,8 @@ cv.predict.xgboost = function(df,
       params = final.params,
       data = dtrain.full,
       nrounds = nrounds,
-      verbose = 0
+      verbose = 0,
+      nthread = 1
     )
     preds.outer <- as.numeric(predict(final.xgb, dtest.full))
     pred.vec[fold.ids == fold] <- preds.outer
@@ -132,6 +180,13 @@ cv.predict.xgboost = function(df,
       if (v %in% rownames(var.imp))
         var.imp[v, fold] <- vi[[v]]
   }
+  
+  # --- parallel backend teardown ---
+  if (parallel_backend) {
+    parallel::stopCluster(cl)
+    foreach::registerDoSEQ()
+  }
+  # -----------------------------------------
   
   observed <- df %>% select(all_of(response.col)) %>% as.matrix()
   predictions <- data.frame("observed" = as.numeric(observed),

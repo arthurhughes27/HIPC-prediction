@@ -59,6 +59,18 @@ cv.predict.baseline = function(df,
       seed = seed,
       baseline = TRUE
     )
+  } else if (model == "elasticnet") {
+    res = cv.predict.elasticnet(
+      df = df,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = "placeholder",
+      feature.engineering.col = "placeholder",
+      feature.engineering.row = "placeholder",
+      feature.selection = "placeholder",
+      seed = seed,
+      baseline = TRUE
+    )
   }
   
   return(res)

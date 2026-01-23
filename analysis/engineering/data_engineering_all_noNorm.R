@@ -13,11 +13,11 @@ load_all("/home/ah3/Desktop/Work/PhD/dearseq/dearseq-devel/")
 processed_data_folder <- "data"
 
 # Paths to processed gene-level data and gene-set objects
-p_load_expr_young_norm <- fs::path(processed_data_folder, "hipc_merged_young_norm.rds")
+p_load_expr_all_noNorm <- fs::path(processed_data_folder, "hipc_merged_all_noNorm.rds")
 p_load_btm           <- fs::path(processed_data_folder, "BTM_processed.rds")
 
 # Load data objects
-hipc_merged_young_norm <- readRDS(p_load_expr_young_norm)
+hipc_merged_all_noNorm <- readRDS(p_load_expr_all_noNorm)
 BTM                  <- readRDS(p_load_btm)
 idx <- which(BTM[["geneset.descriptions"]] == "TBA")
 
@@ -34,7 +34,7 @@ studies_of_interest = c("SDY1276")
 
 # Filter to samples with non-missing immune response, Influenza vaccine,
 # and collected at one of the specified timepoints.
-hipc_merged_young_norm_filtered <- hipc_merged_young_norm %>%
+hipc_merged_all_noNorm_filtered <- hipc_merged_all_noNorm %>%
   filter(
     !is.na(immResp_MFC_anyAssay_log2_MFC),
     vaccine_name == "Influenza (IN)",
@@ -42,11 +42,13 @@ hipc_merged_young_norm_filtered <- hipc_merged_young_norm %>%
     study_accession %in% studies_of_interest
   )
 
-gene_names = hipc_merged_young_norm_filtered %>%
+gene_names <- hipc_merged_all_noNorm_filtered %>%
   dplyr::select(a1cf:zzz3) %>%
+  dplyr::select(where(~ !any(is.na(.)))) %>%
   colnames()
 
-# df = hipc_merged_young_norm_filtered
+
+# df = hipc_merged_all_noNorm_filtered
 genesets = BTM[["genesets"]]
 geneset_names = BTM[["geneset.names.descriptions"]]
 id_col = "participant_id"
@@ -151,16 +153,14 @@ compute_row_transformation = function(df,
   
   if (transformation == "ssgsea") {
     names(genesets) <- geneset_names
-    suppressMessages(
       params <- ssgseaParam(
         exprData = t(expr_mat),
         geneSets = genesets,
         minSize = 1,
         maxSize = Inf,
         normalize = TRUE
-      ),
+      )
       transformed_mat <- t(gsva(params))
-    )
     
     
     transformed_mat <- as.data.frame(transformed_mat, stringsAsFactors = FALSE)
@@ -276,15 +276,15 @@ apply_transformations = function(df,
 }
 
 
-d0 = hipc_merged_young_norm_filtered %>%
+d0 = hipc_merged_all_noNorm_filtered %>%
   filter(study_time_collected == 0) %>%
   select(participant_id, any_of(gene_names))
 
-d1 = hipc_merged_young_norm_filtered %>%
+d1 = hipc_merged_all_noNorm_filtered %>%
   filter(study_time_collected == 1) %>%
   select(participant_id, any_of(gene_names))
 
-d3 = hipc_merged_young_norm_filtered %>%
+d3 = hipc_merged_all_noNorm_filtered %>%
   filter(study_time_collected == 3) %>%
   select(participant_id, any_of(gene_names))
 
@@ -294,7 +294,7 @@ row_transformations <- c("none", "mean", "median", "max", "iqr", "cv", "ssgsea",
 
 # precompute fold-change tables (these lack the time column; we'll add it before passing to functions)
 d1fc <- compute_gene_fc(
-  df = hipc_merged_young_norm_filtered,
+  df = hipc_merged_all_noNorm_filtered,
   id_col = id_col,
   time_col = time_col,
   gene_cols = gene_cols,
@@ -302,7 +302,7 @@ d1fc <- compute_gene_fc(
 )
 
 d3fc <- compute_gene_fc(
-  df = hipc_merged_young_norm_filtered,
+  df = hipc_merged_all_noNorm_filtered,
   id_col = id_col,
   time_col = time_col,
   gene_cols = gene_cols,
@@ -318,9 +318,9 @@ d3fc_time[[time_col]] <- 3L
 
 # mapping of top-level datasets to source data and timepoint
 sources <- list(
-  d0   = list(df = hipc_merged_young_norm_filtered, tp = 0L),
-  d1   = list(df = hipc_merged_young_norm_filtered, tp = 1L),
-  d3   = list(df = hipc_merged_young_norm_filtered, tp = 3L),
+  d0   = list(df = hipc_merged_all_noNorm_filtered, tp = 0L),
+  d1   = list(df = hipc_merged_all_noNorm_filtered, tp = 1L),
+  d3   = list(df = hipc_merged_all_noNorm_filtered, tp = 3L),
   d1fc = list(df = d1fc_time, tp = 1L),
   d3fc = list(df = d3fc_time, tp = 3L)
 )
@@ -380,7 +380,7 @@ for (top_name in names(sources)) {
 
 
 p_save <- fs::path(processed_data_folder,
-                   "engineered_dataframes_influenzain.rds")
+                   "engineered_dataframes_influenzain_all_noNorm.rds")
 
 # Save the data
 saveRDS(engineered, p_save)

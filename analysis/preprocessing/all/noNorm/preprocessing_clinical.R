@@ -13,13 +13,13 @@ library(stringr)
 raw_data_folder = "data-raw"
 
 # Use fs::path() to specify the data path robustly
-p_load <- fs::path(raw_data_folder, "young_norm_eset.rds")
+p_load_all_noNorm <- fs::path(raw_data_folder, "all_noNorm_eset.rds")
 
 # Read in the rds file
-young_norm_eset <- readRDS(p_load)
+all_noNorm_eset <- readRDS(p_load_all_noNorm)
 
 # Extract the clinical data as a dataframe
-hipc_clinical = young_norm_eset@phenoData@data %>% 
+hipc_clinical_all_noNorm = all_noNorm_eset@phenoData@data %>% 
   as.data.frame()
 
 # Data engineering
@@ -28,7 +28,7 @@ hipc_clinical = young_norm_eset@phenoData@data %>%
 # For ethnicity, the values "Not Hispanic or Latino" and "Other" represent the same thing (the only other values are
 # "Not Specified" and "Hispanic or Latino").
 # In addition, we round numerical time columns to avoid long recurring numbers
-hipc_clinical <- hipc_clinical %>%
+hipc_clinical_all_noNorm <- hipc_clinical_all_noNorm %>%
   mutate(
     gender    = fct_collapse(factor(gender), Unknown = c("Not Specified", "Unknown")),
     race      = fct_collapse(factor(race), Unknown = c("Not Specified", "Unknown")),
@@ -38,7 +38,7 @@ hipc_clinical <- hipc_clinical %>%
   )
 
 # Abbreviate the vaccine type column
-hipc_clinical$vaccine_type <- hipc_clinical$vaccine_type %>%
+hipc_clinical_all_noNorm$vaccine_type <- hipc_clinical_all_noNorm$vaccine_type %>%
   as.factor() %>%
   recode_factor(
     "Conjugate" = "CJ",
@@ -51,12 +51,12 @@ hipc_clinical$vaccine_type <- hipc_clinical$vaccine_type %>%
   )
 
 # Create vaccine name column by combining pathogen and vaccine type
-hipc_clinical <- hipc_clinical %>%
+hipc_clinical_all_noNorm <- hipc_clinical_all_noNorm %>%
   mutate(vaccine_name = str_c(pathogen, " (", vaccine_type, ")"))
 
 # Create a shortened vaccine name variable
-hipc_clinical$vaccine_name_short <- recode(
-  hipc_clinical$vaccine_name,
+hipc_clinical_all_noNorm$vaccine_name_short <- recode(
+  hipc_clinical_all_noNorm$vaccine_name,
   "Ebola (RVV)"           = "Ebola (RVV)",
   "Yellow Fever (LV)"     = "Y.F. (LV)",
   "Smallpox (LV)"         = "Smallpox (LV)",
@@ -90,7 +90,7 @@ conditions_order <- c(
 )
 
 # Assign this order to the vaccine names
-hipc_clinical <- hipc_clinical %>% 
+hipc_clinical_all_noNorm <- hipc_clinical_all_noNorm %>% 
   mutate(vaccine_name = factor(vaccine_name, levels = conditions_order))
 
 # Same for the shortened names
@@ -112,7 +112,7 @@ conditions_order_short <- c(
 
 
 # Assign this order to the shortened vaccine names
-hipc_clinical <- hipc_clinical %>% 
+hipc_clinical_all_noNorm <- hipc_clinical_all_noNorm %>% 
   mutate(vaccine_name_short = factor(vaccine_name_short, levels = conditions_order_short))
 
 # Define a colour for each vaccine
@@ -136,16 +136,16 @@ color_palette_vaccine = c(
 
 # Write a helper function to assign the colours
 assign_color <- function(vaccine_name) {
-  return(color_palette_vaccine[match(hipc_clinical$vaccine_name,
-                             levels(hipc_clinical$vaccine_name))])
+  return(color_palette_vaccine[match(hipc_clinical_all_noNorm$vaccine_name,
+                             levels(hipc_clinical_all_noNorm$vaccine_name))])
 }
 
 # Assign the colours to the vaccine names
-hipc_clinical$vaccine_colour <-
-  assign_color(hipc_clinical$vaccine_name)
+hipc_clinical_all_noNorm$vaccine_colour <-
+  assign_color(hipc_clinical_all_noNorm$vaccine_name)
 
 # Define an ordering for the studies (this is for later to make figures consistent)
-study_descriptions = hipc_clinical %>% 
+study_descriptions_all_noNorm = hipc_clinical_all_noNorm %>% 
   dplyr::select(vaccine_name, study_accession) %>% 
   distinct() %>% 
   arrange(vaccine_name)
@@ -155,10 +155,10 @@ study_descriptions = hipc_clinical %>%
 # SDY269 for influenza IN and LV, 
 # SDY180 for influenza IN and Pneumococcus (PS)
 # Define a new variable renaming these to "SDYXa" (CJ, IN) and "SDYXb" (PS, LV) where X is replaced with the appropriate study number
-hipc_clinical = hipc_clinical %>%
+hipc_clinical_all_noNorm = hipc_clinical_all_noNorm %>%
   mutate(study_accession_unique = study_accession) 
 
-hipc_clinical = hipc_clinical %>% 
+hipc_clinical_all_noNorm = hipc_clinical_all_noNorm %>% 
   mutate(
     study_accession_unique = ifelse(
       study_accession_unique == "SDY1260" &
@@ -225,15 +225,15 @@ hipc_clinical = hipc_clinical %>%
   )
 
 # Redefine the study order
-study_descriptions = hipc_clinical %>% 
+study_descriptions_all_noNorm = hipc_clinical_all_noNorm %>% 
   dplyr::select(vaccine_name, study_accession_unique) %>% 
   distinct() %>% 
   arrange(vaccine_name)
 
-study_order <- study_descriptions$study_accession_unique
+study_order <- study_descriptions_all_noNorm$study_accession_unique
 
 # Assign this order to the vaccine names
-hipc_clinical <- hipc_clinical %>% 
+hipc_clinical_all_noNorm <- hipc_clinical_all_noNorm %>% 
   mutate(study_accession_unique = factor(study_accession_unique, levels = study_order))
 
 # Define a colour for each study
@@ -279,18 +279,18 @@ color_palette_study = c(
 
 # Write a helper function to assign the colours
 assign_color <- function(study_accession_unique) {
-  return(color_palette_study[match(hipc_clinical$study_accession_unique,
-                                     levels(hipc_clinical$study_accession_unique))])
+  return(color_palette_study[match(hipc_clinical_all_noNorm$study_accession_unique,
+                                     levels(hipc_clinical_all_noNorm$study_accession_unique))])
 }
 
 # Assign the colours to the vaccine names
-hipc_clinical$study_colour <-
-  assign_color(hipc_clinical$study_accession_unique)
+hipc_clinical_all_noNorm$study_colour <-
+  assign_color(hipc_clinical_all_noNorm$study_accession_unique)
 
 # Final dataframe to be saved has samples as rows and variables as columns
-dim(hipc_clinical)
+dim(hipc_clinical_all_noNorm)
 
-hipc_clinical = hipc_clinical %>% 
+hipc_clinical_all_noNorm = hipc_clinical_all_noNorm %>% 
   filter(vaccine_name == "Influenza (IN)")
 
 # Save processed dataframe
@@ -299,9 +299,9 @@ hipc_clinical = hipc_clinical %>%
 processed_data_folder = "data"
 
 # Use fs::path() to specify the data path robustly
-p_save <- fs::path(processed_data_folder, "hipc_clinical.rds")
+p_save_all_noNorm <- fs::path(processed_data_folder, "hipc_clinical_all_noNorm.rds")
 
 # Save dataframe
-saveRDS(hipc_clinical, file = p_save)
+saveRDS(hipc_clinical_all_noNorm, file = p_save_all_noNorm)
 
 rm(list = ls())

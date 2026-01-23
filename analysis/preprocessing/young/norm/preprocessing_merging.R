@@ -9,21 +9,21 @@ processed_data_folder = "data"
 
 # Use fs::path() to specify the data paths robustly
 p_load_expr_young_norm <- fs::path(processed_data_folder, "young_norm_expr.rds")
-p_load_clinical <- fs::path(processed_data_folder, "hipc_clinical.rds")
+p_load_clinical <- fs::path(processed_data_folder, "hipc_clinical_young_norm.rds")
 p_load_immResp <- fs::path(processed_data_folder, "hipc_immResp.rds")
 
 # Read in the files
 expr_young_norm <- readRDS(p_load_expr_young_norm)
-hipc_clinical <- readRDS(p_load_clinical)
+hipc_clinical_young_norm <- readRDS(p_load_clinical)
 hipc_immResp <- readRDS(p_load_immResp)
 
 # Merge together the clinical and immune response dataframes
-hipc_merged_clinical_immresp = full_join(x = hipc_clinical, y = hipc_immResp, by = c("participant_id", "study_accession"))
+hipc_merged_clinical_immresp_young_norm = full_join(x = hipc_clinical_young_norm, y = hipc_immResp, by = c("participant_id", "study_accession"))
 
 
 # Take distinct rows with respect to participant id and timepoint
 
-hipc_merged_clinical_immresp  = hipc_merged_clinical_immresp %>%
+hipc_merged_clinical_immresp_young_norm  = hipc_merged_clinical_immresp_young_norm %>%
   distinct(participant_id, study_time_collected, .keep_all = T) %>% 
   mutate(genderMale = ifelse(gender == "Male", 1, 0))
 
@@ -32,7 +32,7 @@ expr_young_norm  = expr_young_norm %>%
 
 # Now we can merge these dataframes together by pid and study time
 hipc_merged_young_norm = right_join(
-  x = hipc_merged_clinical_immresp,
+  x = hipc_merged_clinical_immresp_young_norm,
   y = expr_young_norm,
   by = c("participant_id", "study_time_collected")
 )
@@ -78,10 +78,10 @@ processed_data_folder = "data"
 
 # Use fs::path() to specify the data path robustly
 p_save_young_norm <- fs::path(processed_data_folder, "hipc_merged_young_norm.rds")
-p_save_clinical_immresp <- fs::path(processed_data_folder, "hipc_merged_clinical_immresp.rds")
+p_save_clinical_immresp <- fs::path(processed_data_folder, "hipc_merged_clinical_immresp_young_norm.rds")
 
 # Save dataframe
 saveRDS(hipc_merged_young_norm, file = p_save_young_norm)
-saveRDS(hipc_merged_clinical_immresp, file = p_save_clinical_immresp)
+saveRDS(hipc_merged_clinical_immresp_young_norm, file = p_save_clinical_immresp)
 
 rm(list = ls())

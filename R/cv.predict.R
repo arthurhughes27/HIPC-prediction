@@ -11,7 +11,8 @@ cv.predict = function(df.predictor.list,
                       model = "lm",
                       n.folds = NULL,
                       fold.ids = NULL,
-                      seed = 12345) {
+                      seed = 12345,
+                      n.cores = 1) {
   set.seed(seed)
   
   ### DATA SELECTION & FEATURE ENGINEERING ###
@@ -84,10 +85,22 @@ cv.predict = function(df.predictor.list,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
-      seed = seed
+      seed = seed,
+      n.cores = n.cores
     )
   } else if (model == "xgboost") {
     res = cv.predict.xgboost(
+      df = df.all,
+      fold.ids = fold.ids,
+      response.col = response.col,
+      data.selection = data.selection,
+      feature.engineering.col = feature.engineering.col,
+      feature.engineering.row = feature.engineering.row,
+      feature.selection = feature.selection,
+      seed = seed
+    )
+  } else if (model == "elasticnet"){
+    res = cv.predict.elasticnet(
       df = df.all,
       fold.ids = fold.ids,
       response.col = response.col,

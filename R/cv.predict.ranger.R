@@ -11,8 +11,9 @@ cv.predict.ranger = function(df,
                              n.folds.inner = 5,
                              num.trees = 500,
                              mtry.values = NULL,
-                             min.node.size.values = c(1, 5),
-                             baseline = FALSE) {
+                             min.node.size.values = NULL,
+                             baseline = FALSE,
+                             n.cores = 1) {        
   # Set seed
   set.seed(seed)
   
@@ -34,23 +35,61 @@ cv.predict.ranger = function(df,
   
   # defaults for tuning grid if not provided
   if (is.null(mtry.values)) {
-    vals = unique(floor(c(sqrt(p), p / 3, p / 2)))
-    vals = vals[vals >= 1 &
-                  vals <= p] # Ensure mtry is between 1 and the number of predictors
+    # candidate mtry values: small, classical, and larger fractions of p
+    vals <- unique(floor(c(
+      1,
+      sqrt(p),
+      p / 5,
+      p / 3,
+      p / 2
+    )))
+    
+    # keep valid range
+    vals <- vals[vals >= 1 & vals <= p]
+    
     if (length(vals) == 0) {
-      vals = min(1, p)
+      vals <- min(1, p)
     }
-    mtry.values = vals
+    
+    mtry.values <- sort(unique(vals))
   } else {
-    mtry.values = mtry.values[mtry.values >= 1 &
-                                mtry.values <= p] # Ensure mtry is between 1 and the number of predictors
+    # user-supplied grid: keep only valid values
+    mtry.values <- mtry.values[mtry.values >= 1 & mtry.values <= p]
   }
   
-  # Set minimum node size grid
-  min.node.size.values = min.node.size.values[min.node.size.values >= 1]
-  if (length(min.node.size.values) == 0) {
-    min.node.size.values = 1
+  # ---- defaults for min.node.size grid ----
+  if (is.null(min.node.size.values)) {
+    # broader regularisation grid
+    min.node.size.values <- c(1, 3, 5, 10, 20, 50)
   }
+  
+  # keep only valid values
+  min.node.size.values <- min.node.size.values[min.node.size.values >= 1]
+  
+  if (length(min.node.size.values) == 0) {
+    min.node.size.values <- 1
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Set up parallel backend if requested (Option B). We create a PSOCK cluster
+  # with exactly n.cores workers when n.cores > 1. We will ensure ranger inside
+  # each worker uses a single thread to avoid oversubscription.
+  # ---------------------------------------------------------------------------
+  parallel_backend <- FALSE
+  if (!is.numeric(n.cores) || length(n.cores) != 1 || n.cores < 1) {
+    stop("n.cores must be a positive integer of length 1")
+  }
+  n.cores <- as.integer(n.cores)
+  if (n.cores > 1) {
+    if (!requireNamespace("foreach", quietly = TRUE) ||
+        !requireNamespace("doParallel", quietly = TRUE)) {
+      stop("Packages 'foreach' and 'doParallel' are required for parallel execution (install them).")
+    }
+    cl <- parallel::makeCluster(n.cores)
+    doParallel::registerDoParallel(cl)
+    parallel_backend <- TRUE
+  }
+  # ---------------------------------------------------------------------------
   
   # Initialise results vectors
   pred.vec = rep(NA_real_, n)
@@ -75,31 +114,66 @@ cv.predict.ranger = function(df,
       # For each mtry value
       for (min.node in min.node.size.values) {
         # For each min node value
-        inner.rmses = numeric(n.folds.inner)
-        for (ifold in seq_len(n.folds.inner)) {
-          inner.train = df.train[inner.fold.ids != ifold, , drop = FALSE]
-          inner.test  = df.train[inner.fold.ids == ifold, , drop = FALSE]
-          # prepare data for ranger: include response and predictors only
-          inner.train.rf = inner.train[, c(pred.names, response.col), drop = FALSE]
-          inner.test.rf  = inner.test[, c(pred.names, response.col), drop = FALSE]
-          # fit ranger
-          rf.fit = ranger(
-            dependent.variable.name = response.col,
-            data = inner.train.rf,
-            num.trees = num.trees,
-            mtry = mtry.val,
-            min.node.size = min.node,
-            importance = "permutation",
-            write.forest = TRUE,
-            seed = seed + fold + ifold
-          )
-          # Make predictions on inner test data
-          preds.inner = as.numeric(predict(rf.fit, data = inner.test.rf)$predictions)
-          # Inner try values
-          obs.inner = as.numeric(inner.test.rf[[response.col]])
-          # Inner RMSEs
-          inner.rmses[ifold] = sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+        # --- compute inner.rmses either in parallel (foreach) or sequentially ---
+        if (parallel_backend) {
+          # parallel across inner folds; ensure ranger inside each worker uses a single thread
+          inner.rmses <- foreach::foreach(ifold = seq_len(n.folds.inner), .combine = c, .packages = "ranger") %dopar% {
+            # set a reproducible-ish seed per task (worker RNG is separate)
+            set.seed(seed + fold + ifold)
+            inner.train = df.train[inner.fold.ids != ifold, , drop = FALSE]
+            inner.test  = df.train[inner.fold.ids == ifold, , drop = FALSE]
+            # prepare data for ranger: include response and predictors only
+            inner.train.rf = inner.train[, c(pred.names, response.col), drop = FALSE]
+            inner.test.rf  = inner.test[, c(pred.names, response.col), drop = FALSE]
+            # fit ranger (num.threads = 1 inside workers to avoid oversubscription)
+            rf.fit = ranger::ranger(
+              dependent.variable.name = response.col,
+              data = inner.train.rf,
+              num.trees = num.trees,
+              mtry = mtry.val,
+              min.node.size = min.node,
+              importance = "permutation",
+              write.forest = TRUE,
+              seed = seed + fold + ifold,
+              num.threads = 1
+            )
+            # Make predictions on inner test data
+            preds.inner = as.numeric(predict(rf.fit, data = inner.test.rf)$predictions)
+            # Inner try values
+            obs.inner = as.numeric(inner.test.rf[[response.col]])
+            # Inner RMSE
+            sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+          }
+        } else {
+          # sequential computation (original approach)
+          inner.rmses = numeric(n.folds.inner)
+          for (ifold in seq_len(n.folds.inner)) {
+            inner.train = df.train[inner.fold.ids != ifold, , drop = FALSE]
+            inner.test  = df.train[inner.fold.ids == ifold, , drop = FALSE]
+            # prepare data for ranger: include response and predictors only
+            inner.train.rf = inner.train[, c(pred.names, response.col), drop = FALSE]
+            inner.test.rf  = inner.test[, c(pred.names, response.col), drop = FALSE]
+            # fit ranger
+            rf.fit = ranger::ranger(
+              dependent.variable.name = response.col,
+              data = inner.train.rf,
+              num.trees = num.trees,
+              mtry = mtry.val,
+              min.node.size = min.node,
+              importance = "permutation",
+              write.forest = TRUE,
+              seed = seed + fold + ifold,
+              num.threads = 1   # keep single-threaded for consistency; change if desired
+            )
+            # Make predictions on inner test data
+            preds.inner = as.numeric(predict(rf.fit, data = inner.test.rf)$predictions)
+            # Inner try values
+            obs.inner = as.numeric(inner.test.rf[[response.col]])
+            # Inner RMSEs
+            inner.rmses[ifold] = sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+          }
         }
+        
         # Mean RMSE across folds
         mean.rmse = mean(inner.rmses, na.rm = TRUE)
         if (is.finite(mean.rmse) &&
@@ -114,8 +188,8 @@ cv.predict.ranger = function(df,
     # Fit final model using best parameter values
     train.rf = df.train[, c(pred.names, response.col), drop = FALSE]
     test.rf  = df.test[, c(pred.names, response.col), drop = FALSE]
-    # Final model
-    final.rf = ranger(
+    # Final model (keep ranger single-threaded to avoid interference with cluster workers)
+    final.rf = ranger::ranger(
       dependent.variable.name = response.col,
       data = train.rf,
       num.trees = num.trees,
@@ -123,7 +197,8 @@ cv.predict.ranger = function(df,
       min.node.size = best.params$min.node.size,
       importance = "permutation",
       write.forest = TRUE,
-      seed = seed + fold + 1000
+      seed = seed + fold + 1000,
+      num.threads = 1
     )
     
     # Predict on outer test
@@ -136,6 +211,12 @@ cv.predict.ranger = function(df,
       if (v %in% rownames(var.imp))
         var.imp[v, fold] = vi[[v]]
     }
+  }
+  
+  # If we started a cluster, stop it and unregister
+  if (parallel_backend) {
+    parallel::stopCluster(cl)
+    foreach::registerDoSEQ()
   }
   
   # Extract observed values

@@ -19,7 +19,7 @@ processed_data_folder = "data"
 # Use fs::path() to specify the data paths robustly
 p_load_nAb <- fs::path(raw_data_folder, "neut_ab_titer_2025-01-10_01-13-22.xlsx")
 p_load_hai <- fs::path(raw_data_folder, "hai_2025-01-10_01-13-41.xlsx")
-p_load_clinical <- fs::path(processed_data_folder, "hipc_clinical.rds")
+p_load_clinical <- fs::path(processed_data_folder, "hipc_clinical_young_noNorm.rds")
 
 # HAI response data
 response_hai = read_excel(p_load_hai) %>%
@@ -30,11 +30,11 @@ response_nAb = read_excel(p_load_nAb) %>%
   clean_names()
 
 # Clinical data for filtration of participants
-hipc_clinical = readRDS(p_load_clinical)
+hipc_clinical_young_noNorm = readRDS(p_load_clinical)
 
 # First, filter each dataframe to only contain information on participants for which we have gene expression data
 # Find identifiers of participants with gene expression measurements
-participants = hipc_clinical %>%
+participants = hipc_clinical_young_noNorm %>%
   pull(participant_id) %>%
   unique()
 
@@ -63,7 +63,7 @@ raw_response_influenzain = bind_rows(response_nAb, response_hai) %>%
   distinct()
 
 # First get the studies and other clinical data corresponding to each participant id
-hipc_studies = hipc_clinical %>%
+hipc_studies = hipc_clinical_young_noNorm %>%
   select(participant_id,
          age_imputed,
          gender,
@@ -102,7 +102,7 @@ raw_response_influenzain = raw_response_influenzain %>%
   ))
 
 # Use fs::path() to specify the data path robustly
-p_save <- fs::path(processed_data_folder, "raw_response_influenzain.rds")
+p_save <- fs::path(processed_data_folder, "raw_response_influenzain_young_noNorm.rds")
 
 # Save dataframe
 saveRDS(raw_response_influenzain, file = p_save)
