@@ -8,6 +8,9 @@ cv.predict = function(df.predictor.list,
                       feature.engineering.col = "none",
                       feature.engineering.row = "mean",
                       feature.selection = "none",
+                      feature.selection.metric = "sRMSE",
+                      feature.selection.metric.threshold = 1,
+                      feature.selection.model = "lm",
                       model = "lm",
                       n.folds = NULL,
                       fold.ids = NULL,
@@ -48,8 +51,6 @@ cv.predict = function(df.predictor.list,
   }
   
   
-  ### FEATURE SELECTION
-  
   ### CROSS-VALIDATION ###
   
   # Randomise folds
@@ -58,22 +59,25 @@ cv.predict = function(df.predictor.list,
   p = ncol(df.all %>%
              select(-participant_id))
   
-  if (!is.null(fold.ids)){
+  if (!is.null(fold.ids)) {
     n.folds = NULL
   } else {
     fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
   }
-  
   
   if (model == "lm") {
     res = cv.predict.lm(
       df = df.all,
       fold.ids = fold.ids,
       response.col = response.col,
+      predictor.cols = NULL,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
+      feature.selection.metric = feature.selection.metric,
+      feature.selection.metric.threshold = feature.selection.metric.threshold,
+      feature.selection.model = feature.selection.model,
       seed = seed
     )
   } else if (model == "ranger") {
@@ -81,10 +85,14 @@ cv.predict = function(df.predictor.list,
       df = df.all,
       fold.ids = fold.ids,
       response.col = response.col,
+      predictor.cols = NULL,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
+      feature.selection.metric = feature.selection.metric,
+      feature.selection.metric.threshold = feature.selection.metric.threshold,
+      feature.selection.model = feature.selection.model,
       seed = seed,
       n.cores = n.cores
     )
@@ -93,22 +101,30 @@ cv.predict = function(df.predictor.list,
       df = df.all,
       fold.ids = fold.ids,
       response.col = response.col,
+      predictor.cols = NULL,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
+      feature.selection.metric = feature.selection.metric,
+      feature.selection.metric.threshold = feature.selection.metric.threshold,
+      feature.selection.model = feature.selection.model,
       seed = seed,
       n.cores = n.cores
     )
-  } else if (model == "elasticnet"){
+  } else if (model == "elasticnet") {
     res = cv.predict.elasticnet(
       df = df.all,
       fold.ids = fold.ids,
       response.col = response.col,
+      predictor.cols = NULL,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
       feature.selection = feature.selection,
+      feature.selection.metric = feature.selection.metric,
+      feature.selection.metric.threshold = feature.selection.metric.threshold,
+      feature.selection.model = feature.selection.model,
       seed = seed,
       n.cores = n.cores
     )

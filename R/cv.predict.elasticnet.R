@@ -6,27 +6,45 @@ cv.predict.elasticnet = function(df,
                                  data.selection,
                                  feature.engineering.col,
                                  feature.engineering.row,
-                                 feature.selection,
+                                 feature.selection = "none",
+                                 feature.selection.metric = "sRMSE",
+                                 feature.selection.metric.threshold = 1,
+                                 feature.selection.model = "lm",
                                  seed = 12345,
                                  n.folds.inner = 5,
                                  alpha.values = seq(0,1,0.1),
                                  nlambda = 10,
                                  baseline = FALSE,
                                  n.cores = 1) {
+  # Reproducibility
   set.seed(seed)
+  
+  # Number of observations
   n <- nrow(df)
-  pred.names <- setdiff(colnames(df), c("participant_id", response.col))
+  
+  # Predictor names: either provided or derived from df
+  if (is.null(predictor.cols)){
+    pred.names <- setdiff(colnames(df), c("participant_id", response.col))
+  } else {
+    pred.names = predictor.cols
+  }
   p <- length(pred.names)
+  
+  # Outer fold ids: if provided derive n.folds; otherwise sample fold ids
   if (!is.null(fold.ids)) {
     n.folds <- length(unique(fold.ids))
   } else {
     fold.ids <- sample(rep(seq_len(n.folds), length.out = n))
   }
+  
+  # Containers for predictions and per-fold variable importances
   pred.vec <- rep(NA_real_, n)
   var.imp <- matrix(NA_real_, nrow = p, ncol = n.folds)
   rownames(var.imp) <- pred.names
   
-  # parallel backend setup
+  # ---------------------------------------------------------------------------
+  # Parallel backend setup (PSOCK cluster registered for foreach if n.cores > 1)
+  # ---------------------------------------------------------------------------
   parallel_backend <- FALSE
   n.cores <- as.integer(n.cores)
   if (n.cores > 1) {
@@ -35,10 +53,41 @@ cv.predict.elasticnet = function(df,
     parallel_backend <- TRUE
   }
   
+  # Outer cross-validation loop
   for (fold in seq_len(n.folds)) {
+    # Split training / test for this outer fold
     df.train <- df[fold.ids != fold, , drop = FALSE]
     df.test  <- df[fold.ids == fold, , drop = FALSE]
     
+    # create inner fold ids (used by feature selection if requested)
+    set.seed(seed + fold)
+    n.inner <- nrow(df.train)
+    inner.fold.ids <- sample(rep(seq_len(n.folds.inner), length.out = n.inner))
+    
+    ## Feature selection (performed inside each outer fold)
+    if (feature.selection == "none") {
+      # No selection: keep all columns except participant_id
+      pred.selected = df.train %>%
+        select(-participant_id, -all_of(response.col)) %>%
+        colnames()
+      
+    } else if (feature.selection == "univariate") {
+      # Univariate feature selection using inner CV
+      feature.selection.res = feature.selection.univariate(
+        df = df.train,
+        response.col,
+        covariate.cols,
+        model = feature.selection.model,
+        metric = feature.selection.metric,
+        metric.threshold = feature.selection.metric.threshold,
+        fold.ids = inner.fold.ids
+      )
+      pred.selected = c(covariate.cols, feature.selection.res$pred.selected)
+    }
+    
+    # -------------------------------------------------------------------------
+    # Hyperparameter tuning across alpha values (inner CV performed by glmnet)
+    # -------------------------------------------------------------------------
     best.rmse <- Inf
     best.params <- list(alpha = alpha.values[1], lambda = NULL)
     set.seed(seed + fold)
@@ -49,7 +98,7 @@ cv.predict.elasticnet = function(df,
                                     .packages = "glmnet") %dopar% {
                                       alpha.val <- alpha.values[i]
                                       set.seed(seed + fold + i)
-                                      x.train <- data.matrix(df.train[, pred.names, drop = FALSE])
+                                      x.train <- data.matrix(df.train[, pred.selected, drop = FALSE])
                                       y.train <- as.numeric(df.train[[response.col]])
                                       cvfit <- glmnet::cv.glmnet(x = x.train,
                                                                  y = y.train,
@@ -78,7 +127,7 @@ cv.predict.elasticnet = function(df,
       }
     } else {
       for (alpha.val in alpha.values) {
-        x.train <- data.matrix(df.train[, pred.names, drop = FALSE])
+        x.train <- data.matrix(df.train[, pred.selected, drop = FALSE])
         y.train <- as.numeric(df.train[[response.col]])
         cvfit <- glmnet::cv.glmnet(x = x.train,
                                    y = y.train,
@@ -99,9 +148,12 @@ cv.predict.elasticnet = function(df,
       }
     }
     
-    x.train.full <- data.matrix(df.train[, pred.names, drop = FALSE])
+    # -------------------------------------------------------------------------
+    # Final model fit on df.train using best params and predict on outer test
+    # -------------------------------------------------------------------------
+    x.train.full <- data.matrix(df.train[, pred.selected, drop = FALSE])
     y.train.full <- as.numeric(df.train[[response.col]])
-    x.test.full  <- data.matrix(df.test[, pred.names, drop = FALSE])
+    x.test.full  <- data.matrix(df.test[, pred.selected, drop = FALSE])
     
     final.fit <- glmnet::glmnet(x = x.train.full,
                                 y = y.train.full,
@@ -114,6 +166,7 @@ cv.predict.elasticnet = function(df,
     preds.outer <- as.numeric(predict(final.fit, newx = x.test.full, s = best.params$lambda))
     pred.vec[fold.ids == fold] <- preds.outer
     
+    # Extract coefficients (absolute, normalized) and store per-fold variable importance
     coefs <- as.matrix(coef(final.fit, s = best.params$lambda))
     # remove intercept
     if ("(Intercept)" %in% rownames(coefs)) {
@@ -126,17 +179,26 @@ cv.predict.elasticnet = function(df,
     for (v in names(vi)) if (v %in% rownames(var.imp)) var.imp[v, fold] <- vi[[v]]
   }
   
-  # parallel backend teardown
+  # ---------------------------------------------------------------------------
+  # Parallel backend teardown
+  # ---------------------------------------------------------------------------
   if (parallel_backend) {
     parallel::stopCluster(cl)
     foreach::registerDoSEQ()
   }
   
+  # ---------------------------------------------------------------------------
+  # Compute performance metrics and aggregate variable importance across folds
+  # ---------------------------------------------------------------------------
   observed <- df %>% select(all_of(response.col)) %>% as.matrix()
   predictions <- data.frame("observed" = as.numeric(observed), "predicted" = as.numeric(pred.vec))
   colnames(predictions) <- c("observed", "predicted")
+  
   R2 <- cor(predictions$observed, predictions$predicted, use = "complete.obs")^2
-  R.spearman <- cor(predictions$observed, predictions$predicted, method = "spearman", use = "complete.obs")
+  R.spearman <- cor(predictions$observed,
+                    predictions$predicted,
+                    method = "spearman",
+                    use = "complete.obs")
   RMSE <- sqrt(mean((predictions$observed - predictions$predicted)^2, na.rm = TRUE))
   sRMSE <- RMSE / sd(predictions$observed, na.rm = TRUE)
   
@@ -169,15 +231,27 @@ cv.predict.elasticnet = function(df,
     )
   }
   
+  # Aggregate variable importance across folds:
+  # - meanImp: mean importance across folds (variables never selected -> 0)
+  # - sdImp:  standard deviation across folds (insufficient values -> 0)
+  meanImp <- rowMeans(var.imp, na.rm = TRUE)
+  meanImp[!is.finite(meanImp)] <- 0
+  
+  sdImp <- apply(var.imp, 1, function(x) {
+    s <- sd(x, na.rm = TRUE)
+    if (!is.finite(s)) 0 else s
+  })
+  
   varImp <- data.frame(
-    var = rownames(var.imp),
-    meanImp = rowMeans(var.imp, na.rm = TRUE),
-    sdImp = apply(var.imp, 1, sd, na.rm = TRUE),
-    varImp.type = "elasticnet_coefficient",
+    var         = rownames(var.imp),
+    meanImp     = meanImp,
+    sdImp       = sdImp,
+    varImp.type = "coefficient",
     stringsAsFactors = FALSE
   )
   rownames(varImp) <- NULL
   
+  # Prediction plot and return object
   prediction.plot <- cv.plot(pred = predictions$predicted, obs = predictions$observed)
   results <- list(predictions = predictions, metrics = metrics, varImp = varImp, prediction.plot = prediction.plot)
   return(results)

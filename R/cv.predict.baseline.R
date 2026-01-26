@@ -31,7 +31,7 @@ cv.predict.baseline = function(df,
       data.selection = "placeholder",
       feature.engineering.col = "placeholder",
       feature.engineering.row = "placeholder",
-      feature.selection = "placeholder",
+      feature.selection = "none",
       seed = seed,
       baseline = TRUE
     )
@@ -43,7 +43,7 @@ cv.predict.baseline = function(df,
       data.selection = "placeholder",
       feature.engineering.col = "placeholder",
       feature.engineering.row = "placeholder",
-      feature.selection = "placeholder",
+      feature.selection = "none",
       seed = seed,
       baseline = TRUE
     )
@@ -55,7 +55,7 @@ cv.predict.baseline = function(df,
       data.selection = "placeholder",
       feature.engineering.col = "placeholder",
       feature.engineering.row = "placeholder",
-      feature.selection = "placeholder",
+      feature.selection = "none",
       seed = seed,
       baseline = TRUE
     )
@@ -67,7 +67,7 @@ cv.predict.baseline = function(df,
       data.selection = "placeholder",
       feature.engineering.col = "placeholder",
       feature.engineering.row = "placeholder",
-      feature.selection = "placeholder",
+      feature.selection = "none",
       seed = seed,
       baseline = TRUE
     )

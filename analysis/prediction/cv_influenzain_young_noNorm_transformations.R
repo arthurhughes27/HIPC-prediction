@@ -36,9 +36,9 @@ covariate.cols = c("genderMale",
 response.col = "immResp_MFC_hai_log2_post_value"
 
 # Fix the feature selection algorithm
-feature.selection = "none"
+feature.selection = "univariate"
 # Fix the predictive model
-model = "xgboost"
+model = "lm"
 # Set the seed
 seed = 21012026
 
@@ -56,74 +56,80 @@ fold_df <- tibble(participant_id = ids, fold = fold_id)
 
 # Calculate total number of iterations to do
 total.combinations = length(df.predictor.list) * length(df.predictor.list[["d0"]]) *
-  length(df.predictor.list[["d0"]][["none"]]) * 3
+  length(df.predictor.list[["d0"]][["none"]]) * 3 * 2
 
 # Initialise results list
 res.list <- list()
 # Set counter
 i <- 1
-for (mod in c("elasticnet", "xgboost", "ranger")) {
-  for (data.sel in names(df.predictor.list)) {
-    # For each combination of data selection and transformation
-    for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
-      for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]][-1])) {
-        # Print a progress message
-        message(
-          sprintf(
-            "Running data.selection = %s | feat.eng.col = %s | feat.eng.row = %s | iteration = %d of %d | model = %s",
-            data.sel,
-            feat.eng.col,
-            feat.eng.row,
-            i,
-            total.combinations,
-            mod
+for (feat.select in c("univariate", "none")) {
+  for (mod in c("elasticnet", "xgboost", "ranger")) {
+    for (data.sel in names(df.predictor.list)) {
+      # For each combination of data selection and transformation
+      for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
+        for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])) {
+          # Print a progress message
+          message(
+            sprintf(
+              "Running data.selection = %s | feat.eng.col = %s | feat.eng.row = %s | feat.selection = %s | iteration = %d of %d | model = %s",
+              data.sel,
+              feat.eng.col,
+              feat.eng.row,
+              feat.select,
+              i,
+              total.combinations,
+              mod
+            )
           )
-        )
-        
-        in.time = Sys.time()
-        
-        # Extract the correct dataframe
-        df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
-        
-        # Extract the relevant participant identifiers
-        pids.temp = df.temp %>%
-          pull(participant_id)
-        
-        # Extract the relevant folds
-        fold.ids = fold_df %>%
-          filter(participant_id %in% pids.temp) %>%
-          pull(fold)
-        
-        # Cross-validation
-        res = cv.predict(
-          df.predictor.list = df.predictor.list,
-          df.clinical = df.clinical,
-          covariate.cols = covariate.cols,
-          response.col = response.col,
-          data.selection = data.sel,
-          feature.engineering.col = feat.eng.col,
-          feature.engineering.row = feat.eng.row,
-          feature.selection = feature.selection,
-          model = mod,
-          fold.ids = fold.ids,
-          seed = seed,
-          n.cores = 12
-        )
-        
-        out.time = Sys.time()
-        
-        diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
-        
-        message(sprintf("Completed in %.1f mins.", diff.time))
-        
-        
-        # Store the metrics
-        res.list[[i]] <- res[["metrics"]]
-        # Iterate the counter
-        i <- i + 1
-        
-        # Clear the temporary memory
-        gc()
+          
+          in.time = Sys.time()
+          
+          # Extract the correct dataframe
+          df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
+          
+          # Extract the relevant participant identifiers
+          pids.temp = df.temp %>%
+            pull(participant_id)
+          
+          # Extract the relevant folds
+          fold.ids = fold_df %>%
+            filter(participant_id %in% pids.temp) %>%
+            pull(fold)
+          
+          # Cross-validation
+          res = cv.predict(
+            df.predictor.list = df.predictor.list,
+            df.clinical = df.clinical,
+            covariate.cols = covariate.cols,
+            response.col = response.col,
+            data.selection = data.sel,
+            feature.engineering.col = feat.eng.col,
+            feature.engineering.row = feat.eng.row,
+            feature.selection = feat.select,
+            feature.selection.metric = "sRMSE",
+            feature.selection.metric.threshold = 0.75,
+            feature.selection.model = "lm",
+            model = mod,
+            fold.ids = fold.ids,
+            seed = seed,
+            n.cores = 12
+          )
+          
+          out.time = Sys.time()
+          
+          diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
+          
+          message(sprintf("Completed in %.1f mins.", diff.time))
+          
+          
+          # Store the metrics
+          res.list[[i]] <- res[["metrics"]]
+          # Iterate the counter
+          i <- i + 1
+          
+          # Clear the temporary memory
+          gc()
+        }
       }
     }
   }
@@ -163,8 +169,8 @@ for (mod in c("lm", "xgboost", "ranger", "elasticnet")) {
   metrics.df = bind_rows(metrics.df, baseline_results$metrics)
 }
 
-# Path to save the results
-p_save <- fs::path(output_folder,
-                   "metrics_transformations_allmodels_young_noNorm.rds")
-# Save the results
-saveRDS(metrics.df, p_save)
+# # Path to save the results
+# p_save <- fs::path(output_folder,
+#                    "metrics_transformations_allmodels_young_noNorm.rds")
+# # Save the results
+# saveRDS(metrics.df, p_save)
