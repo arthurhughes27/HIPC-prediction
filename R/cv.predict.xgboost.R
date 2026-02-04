@@ -3,6 +3,7 @@ cv.predict.xgboost = function(df,
                               fold.ids,
                               response.col,
                               predictor.cols = NULL,
+                              covariate.cols = NULL,
                               data.selection,
                               feature.engineering.col,
                               feature.engineering.row,
@@ -10,6 +11,8 @@ cv.predict.xgboost = function(df,
                               feature.selection.metric = "sRMSE",
                               feature.selection.metric.threshold = 1,
                               feature.selection.model = "lm",
+                              feature.selection.criterion = "relative.gain",
+                              feature.selection.include.covariates = TRUE,
                               seed = 12345,
                               n.folds.inner = 5,
                               nrounds = 100,
@@ -30,6 +33,8 @@ cv.predict.xgboost = function(df,
     pred.names = predictor.cols
   }
   p <- length(pred.names)
+  
+  pred.names.feature.selection = pred.names[-which(pred.names %in% covariate.cols)]
   
   # Outer folds
   if (!is.null(fold.ids)) {
@@ -53,6 +58,9 @@ cv.predict.xgboost = function(df,
   }
   # -------------------------------
   
+  # Container for variable selection
+  feature_table <- data.frame(pred = pred.names.feature.selection, stringsAsFactors = FALSE)
+  
   # Outer CV loop
   for (fold in seq_len(n.folds)) {
     df.train <- df[fold.ids != fold, , drop = FALSE]
@@ -70,19 +78,55 @@ cv.predict.xgboost = function(df,
         select(-participant_id, -all_of(response.col)) %>%
         colnames()
       
+      feature.selection.res <- NULL
+      
     } else if (feature.selection == "univariate") {
       # Univariate feature selection using inner CV
       feature.selection.res = feature.selection.univariate(
         df = df.train,
-        response.col,
-        covariate.cols,
+        response.col = response.col,
+        covariate.cols = covariate.cols,
+        predictor.cols = pred.names.feature.selection,
         model = feature.selection.model,
         metric = feature.selection.metric,
         metric.threshold = feature.selection.metric.threshold,
+        criterion = feature.selection.criterion,
+        include.covariates = feature.selection.include.covariates,
         fold.ids = inner.fold.ids
       )
       pred.selected = c(covariate.cols, feature.selection.res$pred.selected)
     }
+    
+    # ---- Build fold-specific columns for metrics & selection ----------------
+    metric_colname <- paste0("fold_", fold, "_metric")
+    sel_colname    <- paste0("fold_", fold, "_selected")
+    
+    # initialize vectors with default NA / FALSE
+    metric_vec <- rep(NA_real_, length(pred.names.feature.selection))
+    sel_vec    <- rep(FALSE, length(pred.names.feature.selection))
+    
+    # fill metric_vec if feature.selection.res$pred.results exists and has data
+    if (!is.null(feature.selection.res) &&
+        !is.null(feature.selection.res$pred.results) &&
+        nrow(feature.selection.res$pred.results) > 0) {
+      res <- feature.selection.res$pred.results
+      res$pred <- as.character(res$pred)
+      
+      # match returned results to our master predictor list
+      m <- match(res$pred, pred.names.feature.selection)     # NA for any preds not in pred.names
+      valid_res <- !is.na(m)
+      
+      if (any(valid_res)) {
+        metric_vec[m[valid_res]] <- as.numeric(res$metric[valid_res])
+      }
+    }
+    
+    # fill selection vector: TRUE if predictor is in pred.selected
+    sel_vec <- pred.names.feature.selection %in% pred.selected
+    
+    # attach columns to result dataframe
+    feature_table[[metric_colname]] <- metric_vec
+    feature_table[[sel_colname]]   <- sel_vec
     
     # Inner hyperparameter tuning
     best.rmse <- Inf
@@ -231,6 +275,16 @@ cv.predict.xgboost = function(df,
     for (v in names(vi)) if (v %in% rownames(var.imp)) var.imp[v, fold] <- vi[[v]]
   }
   
+  # Identify the fold-specific metric and selection columns
+  metric_cols <- grep("^fold_\\d+_metric$", names(feature_table), value = TRUE)
+  sel_cols    <- grep("^fold_\\d+_selected$", names(feature_table), value = TRUE)
+  
+  # Compute mean metric across folds (ignoring NAs)
+  feature_table$mean_metric <- rowMeans(feature_table[, metric_cols, drop = FALSE], na.rm = TRUE)
+  
+  # Count how many folds each predictor was selected in
+  feature_table$n_selected <- rowSums(feature_table[, sel_cols, drop = FALSE])
+  
   # --- parallel backend teardown ---
   if (parallel_backend) {
     parallel::stopCluster(cl)
@@ -304,6 +358,7 @@ cv.predict.xgboost = function(df,
     predictions = predictions,
     metrics = metrics,
     varImp = varImp,
+    feature.selection.metrics = feature_table,
     prediction.plot = prediction.plot
   )
   return(results)

@@ -11,11 +11,13 @@ cv.predict = function(df.predictor.list,
                       feature.selection.metric = "sRMSE",
                       feature.selection.metric.threshold = 1,
                       feature.selection.model = "lm",
+                      feature.selection.criterion = "relative.gain",
                       model = "lm",
                       n.folds = NULL,
                       fold.ids = NULL,
                       seed = 12345,
-                      n.cores = 1) {
+                      n.cores = 1,
+                      include.covariates = TRUE) {
   set.seed(seed)
   
   ### DATA SELECTION & FEATURE ENGINEERING ###
@@ -26,10 +28,17 @@ cv.predict = function(df.predictor.list,
       select(-study_time_collected)
     
     # Select relevant columns from the clinical data
-    df.clinical = df.clinical %>%
-      select(participant_id,
-             all_of(covariate.cols),
-             all_of(response.col))
+    if (include.covariates){
+      df.clinical = df.clinical %>%
+        select(participant_id,
+               all_of(covariate.cols),
+               all_of(response.col))
+    } else {
+      df.clinical = df.clinical %>%
+        select(participant_id,
+               all_of(response.col))
+    }
+    
     
     # Merge these into one dataframe
     df.all = right_join(x = df.clinical, y = df.predictors, by = "participant_id") %>%
@@ -71,6 +80,7 @@ cv.predict = function(df.predictor.list,
       fold.ids = fold.ids,
       response.col = response.col,
       predictor.cols = NULL,
+      covariate.cols = covariate.cols,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
@@ -78,6 +88,8 @@ cv.predict = function(df.predictor.list,
       feature.selection.metric = feature.selection.metric,
       feature.selection.metric.threshold = feature.selection.metric.threshold,
       feature.selection.model = feature.selection.model,
+      feature.selection.criterion = feature.selection.criterion,
+      feature.selection.include.covariates = include.covariates,
       seed = seed
     )
   } else if (model == "ranger") {
@@ -86,6 +98,7 @@ cv.predict = function(df.predictor.list,
       fold.ids = fold.ids,
       response.col = response.col,
       predictor.cols = NULL,
+      covariate.cols = covariate.cols,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
@@ -93,6 +106,8 @@ cv.predict = function(df.predictor.list,
       feature.selection.metric = feature.selection.metric,
       feature.selection.metric.threshold = feature.selection.metric.threshold,
       feature.selection.model = feature.selection.model,
+      feature.selection.criterion = feature.selection.criterion,
+      feature.selection.include.covariates = include.covariates,
       seed = seed,
       n.cores = n.cores
     )
@@ -102,6 +117,7 @@ cv.predict = function(df.predictor.list,
       fold.ids = fold.ids,
       response.col = response.col,
       predictor.cols = NULL,
+      covariate.cols = covariate.cols,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
@@ -109,6 +125,8 @@ cv.predict = function(df.predictor.list,
       feature.selection.metric = feature.selection.metric,
       feature.selection.metric.threshold = feature.selection.metric.threshold,
       feature.selection.model = feature.selection.model,
+      feature.selection.criterion = feature.selection.criterion,
+      feature.selection.include.covariates = include.covariates,
       seed = seed,
       n.cores = n.cores
     )
@@ -118,6 +136,7 @@ cv.predict = function(df.predictor.list,
       fold.ids = fold.ids,
       response.col = response.col,
       predictor.cols = NULL,
+      covariate.cols = covariate.cols,
       data.selection = data.selection,
       feature.engineering.col = feature.engineering.col,
       feature.engineering.row = feature.engineering.row,
@@ -125,6 +144,8 @@ cv.predict = function(df.predictor.list,
       feature.selection.metric = feature.selection.metric,
       feature.selection.metric.threshold = feature.selection.metric.threshold,
       feature.selection.model = feature.selection.model,
+      feature.selection.criterion = feature.selection.criterion,
+      feature.selection.include.covariates = include.covariates,
       seed = seed,
       n.cores = n.cores
     )
