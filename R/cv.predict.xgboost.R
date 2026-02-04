@@ -27,7 +27,7 @@ cv.predict.xgboost = function(df,
   
   # Basic dimensions / predictors
   n <- nrow(df)
-  if (is.null(predictor.cols)){
+  if (is.null(predictor.cols)) {
     pred.names <- setdiff(colnames(df), c("participant_id", response.col))
   } else {
     pred.names = predictor.cols
@@ -144,53 +144,47 @@ cv.predict.xgboost = function(df,
           for (cs in colsample.values) {
             # --- inner CV (parallel if requested) ---
             if (parallel_backend) {
-              inner.rmses <- foreach::foreach(ifold = seq_len(n.folds.inner),
-                                              .combine = c,
-                                              .packages = "xgboost") %dopar% {
-                                                set.seed(seed + fold + ifold)
-                                                inner.train <- df.train[inner.fold.ids != ifold, , drop = FALSE]
-                                                inner.test  <- df.train[inner.fold.ids == ifold, , drop = FALSE]
-                                                dtrain <- xgboost::xgb.DMatrix(
-                                                  data = data.matrix(inner.train[, pred.selected, drop = FALSE]),
-                                                  label = as.numeric(inner.train[[response.col]])
-                                                )
-                                                dtest  <- xgboost::xgb.DMatrix(
-                                                  data = data.matrix(inner.test[, pred.selected, drop = FALSE]),
-                                                  label = as.numeric(inner.test[[response.col]])
-                                                )
-                                                params <- list(
-                                                  objective = "reg:squarederror",
-                                                  eta = eta.val,
-                                                  max_depth = md,
-                                                  subsample = ss,
-                                                  colsample_bytree = cs,
-                                                  seed = seed + fold + ifold,
-                                                  verbosity = 0
-                                                )
-                                                xgb.fit <- xgboost::xgb.train(
-                                                  params = params,
-                                                  data = dtrain,
-                                                  nrounds = nrounds,
-                                                  verbose = 0,
-                                                  nthread = 1
-                                                )
-                                                preds.inner <- as.numeric(predict(xgb.fit, dtest))
-                                                obs.inner <- as.numeric(inner.test[[response.col]])
-                                                sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
-                                              }
+              inner.rmses <- foreach::foreach(
+                ifold = seq_len(n.folds.inner),
+                .combine = c,
+                .packages = "xgboost"
+              ) %dopar% {
+                set.seed(seed + fold + ifold)
+                inner.train <- df.train[inner.fold.ids != ifold, , drop = FALSE]
+                inner.test  <- df.train[inner.fold.ids == ifold, , drop = FALSE]
+                dtrain <- xgboost::xgb.DMatrix(data = data.matrix(inner.train[, pred.selected, drop = FALSE]),
+                                               label = as.numeric(inner.train[[response.col]]))
+                dtest  <- xgboost::xgb.DMatrix(data = data.matrix(inner.test[, pred.selected, drop = FALSE]),
+                                               label = as.numeric(inner.test[[response.col]]))
+                params <- list(
+                  objective = "reg:squarederror",
+                  eta = eta.val,
+                  max_depth = md,
+                  subsample = ss,
+                  colsample_bytree = cs,
+                  seed = seed + fold + ifold,
+                  verbosity = 0
+                )
+                xgb.fit <- xgboost::xgb.train(
+                  params = params,
+                  data = dtrain,
+                  nrounds = nrounds,
+                  verbose = 0,
+                  nthread = 1
+                )
+                preds.inner <- as.numeric(predict(xgb.fit, dtest))
+                obs.inner <- as.numeric(inner.test[[response.col]])
+                sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+              }
             } else {
               inner.rmses <- numeric(n.folds.inner)
               for (ifold in seq_len(n.folds.inner)) {
                 inner.train <- df.train[inner.fold.ids != ifold, , drop = FALSE]
                 inner.test  <- df.train[inner.fold.ids == ifold, , drop = FALSE]
-                dtrain <- xgboost::xgb.DMatrix(
-                  data = data.matrix(inner.train[, pred.selected, drop = FALSE]),
-                  label = as.numeric(inner.train[[response.col]])
-                )
-                dtest  <- xgboost::xgb.DMatrix(
-                  data = data.matrix(inner.test[, pred.selected, drop = FALSE]),
-                  label = as.numeric(inner.test[[response.col]])
-                )
+                dtrain <- xgboost::xgb.DMatrix(data = data.matrix(inner.train[, pred.selected, drop = FALSE]),
+                                               label = as.numeric(inner.train[[response.col]]))
+                dtest  <- xgboost::xgb.DMatrix(data = data.matrix(inner.test[, pred.selected, drop = FALSE]),
+                                               label = as.numeric(inner.test[[response.col]]))
                 params <- list(
                   objective = "reg:squarederror",
                   eta = eta.val,
@@ -229,14 +223,8 @@ cv.predict.xgboost = function(df,
     }
     
     # Final training & prediction using selected predictors
-    dtrain.full <- xgboost::xgb.DMatrix(
-      data = data.matrix(df.train[, pred.selected, drop = FALSE]),
-      label = as.numeric(df.train[[response.col]])
-    )
-    dtest.full  <- xgboost::xgb.DMatrix(
-      data = data.matrix(df.test[, pred.selected, drop = FALSE]),
-      label = as.numeric(df.test[[response.col]])
-    )
+    dtrain.full <- xgboost::xgb.DMatrix(data = data.matrix(df.train[, pred.selected, drop = FALSE]), label = as.numeric(df.train[[response.col]]))
+    dtest.full  <- xgboost::xgb.DMatrix(data = data.matrix(df.test[, pred.selected, drop = FALSE]), label = as.numeric(df.test[[response.col]]))
     final.params <- list(
       objective = "reg:squarederror",
       eta = best.params$eta,
@@ -271,8 +259,14 @@ cv.predict.xgboost = function(df,
       vi[names(vals)] <- vals
     }
     vi.max <- max(vi, na.rm = TRUE)
-    if (is.finite(vi.max) && vi.max > 0) vi <- vi / vi.max else vi[] <- NA_real_
-    for (v in names(vi)) if (v %in% rownames(var.imp)) var.imp[v, fold] <- vi[[v]]
+    if (is.finite(vi.max) &&
+        vi.max > 0)
+      vi <- vi / vi.max
+    else
+      vi[] <- NA_real_
+    for (v in names(vi))
+      if (v %in% rownames(var.imp))
+        var.imp[v, fold] <- vi[[v]]
   }
   
   # Identify the fold-specific metric and selection columns
@@ -302,16 +296,24 @@ cv.predict.xgboost = function(df,
                     predictions$predicted,
                     method = "spearman",
                     use = "complete.obs")
-  RMSE <- sqrt(mean((predictions$observed - predictions$predicted)^2, na.rm = TRUE))
+  RMSE <- sqrt(mean((
+    predictions$observed - predictions$predicted
+  )^2, na.rm = TRUE))
   sRMSE <- RMSE / sd(predictions$observed, na.rm = TRUE)
   
   # Store metrics
   if (baseline) {
     metrics <- data.frame(
       "data.selection" = "baseline",
+      "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col" = "baseline",
       "feature.engineering.row" = "baseline",
       "feature.selection" = "baseline",
+      "feature.selection.metric" = "baseline",
+      "feature.selection.metric.threshold" = "baseline",
+      "feature.selection.model" = "baseline",
+      "feature.selection.criterion" = "baseline",
+      "feature.selection.covariates" = "baseline",
       "model" = "xgboost",
       "R2" = R2,
       "R.spearman" = R.spearman,
@@ -322,9 +324,15 @@ cv.predict.xgboost = function(df,
   } else {
     metrics <- data.frame(
       "data.selection" = data.selection,
+      "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col" = feature.engineering.col,
       "feature.engineering.row" = feature.engineering.row,
       "feature.selection" = feature.selection,
+      "feature.selection.metric" = ifelse(feature.selection == "none", "none", feature.selection.metric),
+      "feature.selection.metric.threshold" = ifelse(feature.selection == "none", "none", feature.selection.metric.threshold),
+      "feature.selection.model" = ifelse(feature.selection == "none", "none", feature.selection.model),
+      "feature.selection.criterion" = ifelse(feature.selection == "none", "none", feature.selection.criterion),
+      "feature.selection.covariates" = ifelse(feature.selection == "none", "none", feature.selection.covariates),
       "model" = "xgboost",
       "R2" = R2,
       "R.spearman" = R.spearman,
@@ -340,7 +348,10 @@ cv.predict.xgboost = function(df,
   
   sdImp <- apply(var.imp, 1, function(x) {
     s <- sd(x, na.rm = TRUE)
-    if (!is.finite(s)) 0 else s
+    if (!is.finite(s))
+      0
+    else
+      s
   })
   
   varImp <- data.frame(

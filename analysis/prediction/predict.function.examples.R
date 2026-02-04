@@ -91,8 +91,6 @@ model = mod
 n.cores = 12
 include.covariates = TRUE
 
-
-
 # Cross-validation
 res = cv.predict(
   df.predictor.list = df.predictor.list,
@@ -102,12 +100,12 @@ res = cv.predict(
   data.selection = data.sel,
   feature.engineering.col = feat.eng.col,
   feature.engineering.row = feat.eng.row,
-  feature.selection = "univariate",
-  feature.selection.metric = "R2",
-  feature.selection.metric.threshold = 0,
+  feature.selection = "none",
+  feature.selection.metric = "sRMSE",
+  feature.selection.metric.threshold = 1,
   feature.selection.model = "lm",
   feature.selection.criterion = "relative.gain",
-  include.covariates = TRUE,
+  include.covariates = F,
   model = mod,
   fold.ids = fold.ids,
   seed = seed,

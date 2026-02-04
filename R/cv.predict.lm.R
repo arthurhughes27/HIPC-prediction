@@ -119,12 +119,12 @@ cv.predict.lm = function(df,
     
     # Build formula safely quoting predictor names to allow non-syntactic names
     predictor.cols.safe <- paste0("`", pred.selected, "`")
-    form <- as.formula(
-      paste0(
-        "`", response.col, "` ~ ",
-        paste(predictor.cols.safe, collapse = " + ")
-      )
-    )
+    form <- as.formula(paste0(
+      "`",
+      response.col,
+      "` ~ ",
+      paste(predictor.cols.safe, collapse = " + ")
+    ))
     
     # Fit linear model on training data for this outer fold
     fit <- lm(form, data = df.train)
@@ -156,10 +156,8 @@ cv.predict.lm = function(df,
   
   # Observed / predicted summary
   observed <- df %>% select(all_of(response.col)) %>% as.matrix()
-  predictions <- data.frame(
-    "observed"  = as.numeric(observed),
-    "predicted" = as.numeric(pred.vec)
-  )
+  predictions <- data.frame("observed"  = as.numeric(observed),
+                            "predicted" = as.numeric(pred.vec))
   colnames(predictions) <- c("observed", "predicted")
   
   # Performance metrics
@@ -168,16 +166,24 @@ cv.predict.lm = function(df,
                     predictions$predicted,
                     method = "spearman",
                     use = "complete.obs")
-  RMSE <- sqrt(mean((predictions$observed - predictions$predicted)^2, na.rm = TRUE))
+  RMSE <- sqrt(mean((
+    predictions$observed - predictions$predicted
+  )^2, na.rm = TRUE))
   sRMSE <- RMSE / sd(predictions$observed, na.rm = TRUE)
   
   # Store metrics (baseline vs supplied metadata)
   if (baseline) {
     metrics <- data.frame(
       "data.selection"             = "baseline",
+      "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col"    = "baseline",
       "feature.engineering.row"    = "baseline",
       "feature.selection"          = "baseline",
+      "feature.selection.metric" = "baseline",
+      "feature.selection.metric.threshold" = "baseline",
+      "feature.selection.model" = "baseline",
+      "feature.selection.criterion" = "baseline",
+      "feature.selection.covariates" = "baseline",
       "model"                      = "lm",
       "R2"                         = R2,
       "R.spearman"                 = R.spearman,
@@ -188,9 +194,15 @@ cv.predict.lm = function(df,
   } else {
     metrics <- data.frame(
       "data.selection"             = data.selection,
+      "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col"    = feature.engineering.col,
       "feature.engineering.row"    = feature.engineering.row,
       "feature.selection"          = feature.selection,
+      "feature.selection.metric" = ifelse(feature.selection == "none", "none", feature.selection.metric),
+      "feature.selection.metric.threshold" = ifelse(feature.selection == "none", "none", feature.selection.metric.threshold),
+      "feature.selection.model" = ifelse(feature.selection == "none", "none", feature.selection.model),
+      "feature.selection.criterion" = ifelse(feature.selection == "none", "none", feature.selection.criterion),
+      "feature.selection.covariates" = ifelse(feature.selection == "none", "none", feature.selection.covariates),
       "model"                      = "lm",
       "R2"                         = R2,
       "R.spearman"                 = R.spearman,
@@ -210,7 +222,10 @@ cv.predict.lm = function(df,
   sdImp <- apply(var.imp, 1, function(x) {
     s <- sd(x, na.rm = TRUE)
     # sd() returns NA if fewer than 2 non-NA values; treat that as 0
-    if (!is.finite(s)) 0 else s
+    if (!is.finite(s))
+      0
+    else
+      s
   })
   
   varImp <- data.frame(

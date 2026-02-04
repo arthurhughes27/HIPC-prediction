@@ -19,7 +19,7 @@ cv.predict.ranger = function(df,
                              mtry.values = NULL,
                              min.node.size.values = NULL,
                              baseline = FALSE,
-                             n.cores = 1) {        
+                             n.cores = 1) {
   # -------------------------
   # Reproducibility
   # -------------------------
@@ -30,7 +30,7 @@ cv.predict.ranger = function(df,
   # -------------------------
   n = nrow(df)
   
-  if (is.null(predictor.cols)){
+  if (is.null(predictor.cols)) {
     pred.names <- setdiff(colnames(df), c("participant_id", response.col))
   } else {
     pred.names = predictor.cols
@@ -54,7 +54,9 @@ cv.predict.ranger = function(df,
   if (is.null(mtry.values)) {
     vals <- unique(floor(c(1, sqrt(p), p / 5, p / 3, p / 2)))
     vals <- vals[vals >= 1 & vals <= p]
-    if (length(vals) == 0) { vals <- min(1, p) }
+    if (length(vals) == 0) {
+      vals <- min(1, p)
+    }
     mtry.values <- sort(unique(vals))
   } else {
     mtry.values <- mtry.values[mtry.values >= 1 & mtry.values <= p]
@@ -74,7 +76,6 @@ cv.predict.ranger = function(df,
   parallel_backend <- FALSE
   n.cores <- as.integer(n.cores)
   if (n.cores > 1) {
-    
     cl <- parallel::makeCluster(n.cores)
     doParallel::registerDoParallel(cl)
     parallel_backend <- TRUE
@@ -167,7 +168,8 @@ cv.predict.ranger = function(df,
     feature_table[[sel_colname]]   <- sel_vec
     
     # Update possible mtry values
-    mtry.values <- mtry.values[mtry.values >= 1 & mtry.values <= length(pred.selected)]
+    mtry.values <- mtry.values[mtry.values >= 1 &
+                                 mtry.values <= length(pred.selected)]
     
     # -------------------------------------------------------------------------
     # Inner hyperparameter search (over mtry.values and min.node.size.values)
@@ -177,30 +179,32 @@ cv.predict.ranger = function(df,
         # compute inner.rmses either in parallel (foreach) or sequentially
         if (parallel_backend) {
           # parallel across inner folds; ensure ranger inside each worker uses a single thread
-          inner.rmses <- foreach::foreach(ifold = seq_len(n.folds.inner),
-                                          .combine = c,
-                                          .packages = "ranger") %dopar% {
-                                            set.seed(seed + fold + ifold)
-                                            inner.train = df.train[inner.fold.ids != ifold, , drop = FALSE]
-                                            inner.test  = df.train[inner.fold.ids == ifold, , drop = FALSE]
-                                            # prepare data using selected predictors + response
-                                            inner.train.rf = inner.train[, c(pred.selected, response.col), drop = FALSE]
-                                            inner.test.rf  = inner.test[, c(pred.selected, response.col), drop = FALSE]
-                                            rf.fit = ranger::ranger(
-                                              dependent.variable.name = response.col,
-                                              data = inner.train.rf,
-                                              num.trees = num.trees,
-                                              mtry = mtry.val,
-                                              min.node.size = min.node,
-                                              importance = "permutation",
-                                              write.forest = TRUE,
-                                              seed = seed + fold + ifold,
-                                              num.threads = 1
-                                            )
-                                            preds.inner = as.numeric(predict(rf.fit, data = inner.test.rf)$predictions)
-                                            obs.inner = as.numeric(inner.test.rf[[response.col]])
-                                            sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
-                                          }
+          inner.rmses <- foreach::foreach(
+            ifold = seq_len(n.folds.inner),
+            .combine = c,
+            .packages = "ranger"
+          ) %dopar% {
+            set.seed(seed + fold + ifold)
+            inner.train = df.train[inner.fold.ids != ifold, , drop = FALSE]
+            inner.test  = df.train[inner.fold.ids == ifold, , drop = FALSE]
+            # prepare data using selected predictors + response
+            inner.train.rf = inner.train[, c(pred.selected, response.col), drop = FALSE]
+            inner.test.rf  = inner.test[, c(pred.selected, response.col), drop = FALSE]
+            rf.fit = ranger::ranger(
+              dependent.variable.name = response.col,
+              data = inner.train.rf,
+              num.trees = num.trees,
+              mtry = mtry.val,
+              min.node.size = min.node,
+              importance = "permutation",
+              write.forest = TRUE,
+              seed = seed + fold + ifold,
+              num.threads = 1
+            )
+            preds.inner = as.numeric(predict(rf.fit, data = inner.test.rf)$predictions)
+            obs.inner = as.numeric(inner.test.rf[[response.col]])
+            sqrt(mean((obs.inner - preds.inner)^2, na.rm = TRUE))
+          }
         } else {
           # sequential computation
           inner.rmses = numeric(n.folds.inner)
@@ -287,10 +291,8 @@ cv.predict.ranger = function(df,
   # Observed / predicted and metrics
   # -------------------------
   observed = df %>% select(all_of(response.col)) %>% as.matrix()
-  predictions = data.frame(
-    "observed"  = as.numeric(observed),
-    "predicted" = as.numeric(pred.vec)
-  )
+  predictions = data.frame("observed"  = as.numeric(observed),
+                           "predicted" = as.numeric(pred.vec))
   colnames(predictions) = c("observed", "predicted")
   
   R2 = cor(predictions$observed, predictions$predicted, use = "complete.obs")^2
@@ -298,7 +300,9 @@ cv.predict.ranger = function(df,
                    predictions$predicted,
                    method = "spearman",
                    use = "complete.obs")
-  RMSE = sqrt(mean((predictions$observed - predictions$predicted)^2, na.rm = TRUE))
+  RMSE = sqrt(mean((
+    predictions$observed - predictions$predicted
+  )^2, na.rm = TRUE))
   sRMSE = RMSE / sd(predictions$observed, na.rm = TRUE)
   
   # -------------------------
@@ -307,9 +311,15 @@ cv.predict.ranger = function(df,
   if (baseline) {
     metrics <- data.frame(
       "data.selection" = "baseline",
+      "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col" = "baseline",
       "feature.engineering.row" = "baseline",
       "feature.selection" = "baseline",
+      "feature.selection.metric" = "baseline",
+      "feature.selection.metric.threshold" = "baseline",
+      "feature.selection.model" = "baseline",
+      "feature.selection.criterion" = "baseline",
+      "feature.selection.covariates" = "baseline",
       "model" = "ranger",
       "R2" = R2,
       "R.spearman" = R.spearman,
@@ -320,9 +330,15 @@ cv.predict.ranger = function(df,
   } else {
     metrics <- data.frame(
       "data.selection" = data.selection,
+      "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col" = feature.engineering.col,
       "feature.engineering.row" = feature.engineering.row,
       "feature.selection" = feature.selection,
+      "feature.selection.metric" = ifelse(feature.selection == "none", "none", feature.selection.metric),
+      "feature.selection.metric.threshold" = ifelse(feature.selection == "none", "none", feature.selection.metric.threshold),
+      "feature.selection.model" = ifelse(feature.selection == "none", "none", feature.selection.model),
+      "feature.selection.criterion" = ifelse(feature.selection == "none", "none", feature.selection.criterion),
+      "feature.selection.covariates" = ifelse(feature.selection == "none", "none", feature.selection.covariates),
       "model" = "ranger",
       "R2" = R2,
       "R.spearman" = R.spearman,
@@ -340,7 +356,10 @@ cv.predict.ranger = function(df,
   
   sdImp <- apply(var.imp, 1, function(x) {
     s <- sd(x, na.rm = TRUE)
-    if (!is.finite(s)) 0 else s
+    if (!is.finite(s))
+      0
+    else
+      s
   })
   
   varImp = data.frame(

@@ -30,7 +30,7 @@ feature.selection.univariate = function(df,
   
   if (criterion == "relative.gain") {
     pred.vec <- rep(NA_real_, nrow(df))
-    for (fold in unique(fold.ids)) {
+    for (fold in sort(unique(fold.ids))) {
       train.idx <- which(fold.ids != fold)
       test.idx  <- which(fold.ids == fold)
       
