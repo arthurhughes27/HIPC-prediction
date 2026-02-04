@@ -10,7 +10,6 @@ feature.selection.univariate = function(df,
                                         include.covariates = TRUE,
                                         n.folds = 5,
                                         fold.ids) {
-  
   n <- nrow(df)          # Number of observations
   p <- length(predictor.cols) # Number of candidate predictors
   
@@ -22,11 +21,9 @@ feature.selection.univariate = function(df,
   }
   
   # Initialize result dataframe to store metric for each predictor
-  pred.res <- data.frame(
-    pred = predictor.cols,
-    metric = 0,
-    stringsAsFactors = FALSE
-  )
+  pred.res <- data.frame(pred = predictor.cols,
+                         metric = 0,
+                         stringsAsFactors = FALSE)
   
   if (criterion == "relative.gain") {
     pred.vec <- rep(NA_real_, nrow(df))
@@ -55,6 +52,24 @@ feature.selection.univariate = function(df,
           pred.vec[test.idx] <- coef(lm.fit)[1]
         }
       }
+      
+      if (model == "ranger") {
+        if (include.covariates) {
+          train.df <- df[train.idx, c(response.col, covariate.cols), drop = FALSE]
+          test.df  <- df[test.idx, covariate.cols, drop = FALSE]
+          
+          rf.fit <- ranger::ranger(
+            formula = reformulate(covariate.cols, response = response.col),
+            data = train.df
+          )
+          
+          pred.vec[test.idx] <- predict(rf.fit, data = test.df)$predictions
+          
+        } else {
+          train.df <- df[train.idx, response.col, drop = FALSE]
+          pred.vec[test.idx] <- mean(train.df[[response.col]], na.rm = TRUE)
+        }
+      }
     }
     
     obs <- df[[response.col]]
@@ -70,7 +85,7 @@ feature.selection.univariate = function(df,
     }
   }
   
-  for (pred in predictor.cols){
+  for (pred in predictor.cols) {
     pred.vec <- rep(NA_real_, nrow(df))
     
     for (fold in unique(fold.ids)) {
@@ -80,29 +95,44 @@ feature.selection.univariate = function(df,
       if (model == "lm") {
         if (include.covariates) {
           train.df <- df[train.idx, c(response.col, pred, covariate.cols), drop = FALSE]
-          test.df  <- df[test.idx,  c(pred, covariate.cols), drop = FALSE]
+          test.df  <- df[test.idx, c(pred, covariate.cols), drop = FALSE]
           
           rhs.cols <- c(pred, covariate.cols)
           rhs.cols <- paste0("`", rhs.cols, "`")  # backticks for formula
           
-          lm.fit <- lm(
-            reformulate(rhs.cols, response = response.col),
-            data = train.df
-          )
+          lm.fit <- lm(reformulate(rhs.cols, response = response.col),
+                       data = train.df)
           pred.vec[test.idx] <- predict(lm.fit, newdata = test.df)
           
         } else {
           train.df <- df[train.idx, c(response.col, pred), drop = FALSE]
-          test.df  <- df[test.idx,  c(pred), drop = FALSE]
+          test.df  <- df[test.idx, c(pred), drop = FALSE]
           
           rhs.cols <- c(pred)
           rhs.cols <- paste0("`", rhs.cols, "`")  # backticks for formula
           
-          lm.fit <- lm(
-            reformulate(rhs.cols, response = response.col),
-            data = train.df
-          )
+          lm.fit <- lm(reformulate(rhs.cols, response = response.col),
+                       data = train.df)
           pred.vec[test.idx] <- predict(lm.fit, newdata = test.df)
+        }
+      } else if (model == "ranger") {
+        if (include.covariates) {
+          train.df <- df[train.idx, c(response.col, pred, covariate.cols), drop = FALSE]
+          test.df  <- df[test.idx, c(pred, covariate.cols), drop = FALSE]
+          
+          rf.fit <- ranger::ranger(dependent.variable.name = response.col,
+                                   data = train.df)
+          
+          pred.vec[test.idx] <- predict(rf.fit, data = test.df)$predictions
+          
+        } else {
+          train.df <- df[train.idx, c(response.col, pred), drop = FALSE]
+          test.df  <- df[test.idx, c(pred), drop = FALSE]
+          
+          rf.fit <- ranger::ranger(dependent.variable.name = response.col,
+                                   data = train.df)
+          
+          pred.vec[test.idx] <- predict(rf.fit, data = test.df)$predictions
         }
       }
     }
@@ -147,17 +177,13 @@ feature.selection.univariate = function(df,
       filter(relative.gain > metric.threshold) %>%
       pull(pred)
     
-    pred.res = pred.res %>% 
-      mutate(metric.base = metric,
-             metric = relative.gain)
+    pred.res = pred.res %>%
+      mutate(metric.base = metric, metric = relative.gain)
   }
-
+  
   
   # Return list with selected predictors and metrics for all predictors
-  res.list <- list(
-    pred.selected = pred.selected,
-    pred.results = pred.res
-  )
+  res.list <- list(pred.selected = pred.selected, pred.results = pred.res)
   
   return(res.list)
 }
