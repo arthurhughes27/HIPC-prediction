@@ -62,79 +62,82 @@ i <- 1
 
 mod = "ranger"
 feat.eng.col = "none"
-feat.select = "none"
+feat.select = "univariate"
+data.sel = "d1"
+feat.eng.row = "mean"
+include.cov = TRUE
 
-for (data.sel in names(df.predictor.list)) {
-  for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])[-1]) {
-    for (include.cov in c(TRUE)) {
-      total.combinations = length(names(df.predictor.list[[data.sel]][[feat.eng.col]])) * length(c(TRUE, FALSE)) * length(names(df.predictor.list))
-      
-      message(
-        sprintf(
-          "Running data.selection = %s | include.covariates = %d | feat.eng.col = %s | feat.eng.row = %s | feat.selection = %s | iteration = %d of %d | model = %s",
-          data.sel,
-          include.cov,
-          feat.eng.col,
-          feat.eng.row,
-          feat.select,
-          i,
-          total.combinations,
-          mod
-        )
-      )
-      
-      in.time = Sys.time()
-      
-      # Extract the correct dataframe
-      df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
-      
-      # Extract the relevant participant identifiers
-      pids.temp = df.temp %>%
-        pull(participant_id)
-      
-      # Extract the relevant folds
-      fold.ids = fold_df %>%
-        filter(participant_id %in% pids.temp) %>%
-        pull(fold)
-      
-      # Cross-validation
-      res = cv.predict(
-        df.predictor.list = df.predictor.list,
-        df.clinical = df.clinical,
-        covariate.cols = covariate.cols,
-        response.col = response.col,
-        data.selection = data.sel,
-        feature.engineering.col = feat.eng.col,
-        feature.engineering.row = feat.eng.row,
-        feature.selection = feat.select,
-        feature.selection.metric = "sRMSE",
-        feature.selection.metric.threshold = 0.75,
-        feature.selection.model = "lm",
-        feature.selection.criterion = "relative.gain",
-        include.covariates = include.cov,
-        model = mod,
-        fold.ids = fold.ids,
-        seed = seed,
-        n.cores = 2
-      )
-      
-      out.time = Sys.time()
-      
-      diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
-      
-      message(sprintf("Completed in %.1f mins.", diff.time))
-      
-      
-      # Store the metrics
-      res.list[[i]] <- res[["metrics"]]
-      # Iterate the counter
-      i <- i + 1
-      
-      # Clear the temporary memory
-      gc()
-    }
-  }
-}
+# for (data.sel in names(df.predictor.list)) {
+#   for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])[-1]) {
+#     for (include.cov in c(TRUE)) {
+total.combinations = length(names(df.predictor.list[[data.sel]][[feat.eng.col]])) * length(c(TRUE, FALSE)) * length(names(df.predictor.list))
+
+message(
+  sprintf(
+    "Running data.selection = %s | include.covariates = %d | feat.eng.col = %s | feat.eng.row = %s | feat.selection = %s | iteration = %d of %d | model = %s",
+    data.sel,
+    include.cov,
+    feat.eng.col,
+    feat.eng.row,
+    feat.select,
+    i,
+    total.combinations,
+    mod
+  )
+)
+
+in.time = Sys.time()
+
+# Extract the correct dataframe
+df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
+
+# Extract the relevant participant identifiers
+pids.temp = df.temp %>%
+  pull(participant_id)
+
+# Extract the relevant folds
+fold.ids = fold_df %>%
+  filter(participant_id %in% pids.temp) %>%
+  pull(fold)
+
+# Cross-validation
+res = cv.predict(
+  df.predictor.list = df.predictor.list,
+  df.clinical = df.clinical,
+  covariate.cols = covariate.cols,
+  response.col = response.col,
+  data.selection = data.sel,
+  feature.engineering.col = feat.eng.col,
+  feature.engineering.row = feat.eng.row,
+  feature.selection = feat.select,
+  feature.selection.metric = "sRMSE",
+  feature.selection.metric.threshold = 0.05,
+  feature.selection.model = "lm",
+  feature.selection.criterion = "relative.gain",
+  include.covariates = include.cov,
+  model = mod,
+  fold.ids = fold.ids,
+  seed = seed,
+  n.cores = 12
+)
+
+out.time = Sys.time()
+
+diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
+
+message(sprintf("Completed in %.1f mins.", diff.time))
+
+
+# Store the metrics
+res.list[[i]] <- res[["metrics"]]
+# Iterate the counter
+i <- i + 1
+
+# Clear the temporary memory
+gc()
+#     }
+#   }
+# }
 
 # Bind the metrics into a dataframe
 metrics.df <- bind_rows(res.list)
@@ -171,6 +174,6 @@ for (mod in c("lm")) {
 }
 
 # Path to save the results
-p_save <- fs::path(output_folder, "metrics_transformations_ranger_allData.rds")
+p_save <- fs::path(output_folder, "metrics_featureselection_ranger_allData.rds")
 # Save the results
 saveRDS(metrics.df, p_save)
