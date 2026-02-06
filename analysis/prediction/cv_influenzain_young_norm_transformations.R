@@ -16,9 +16,12 @@ sapply(list.files("R/", pattern = "\\.R$", full.names = TRUE), source)
 processed_data_folder <- "data"
 # Output folder to save results
 output_folder = fs::path("output", "results")
+# Study of interest
+study_of_interest = "SDY80"
+
 # Path for predictor sets
 df.predictor.list.path = fs::path(processed_data_folder,
-                                  "engineered_dataframes_influenzain_young_norm.rds")
+                                  paste0("engineered_dataframes_influenzain_young_norm_",study_of_interest,".rds"))
 # Path for clinical
 df.clinical.path = fs::path(processed_data_folder, "hipc_merged_clinical_immresp_young_norm.rds")
 

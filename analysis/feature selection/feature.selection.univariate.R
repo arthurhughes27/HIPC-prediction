@@ -9,12 +9,14 @@ sapply(list.files("R/", pattern = "\\.R$", full.names = TRUE), source)
 processed_data_folder <- "data"
 # Output folder to save results
 output_folder = fs::path("output", "results")
+
+study_of_interest = "SDY80"
 # Path for predictor sets
 df.predictor.list.path = fs::path(processed_data_folder,
-                                  "engineered_dataframes_influenzain_all_norm.rds")
+                                  paste0("engineered_dataframes_influenzain_all_noNorm_",study_of_interest,".rds"))
 # Path for clinical
 df.clinical.path = fs::path(processed_data_folder,
-                            "hipc_merged_clinical_immresp_all_norm.rds")
+                            "hipc_merged_clinical_immresp_all_noNorm.rds")
 
 # Load the data
 df.predictor.list = readRDS(df.predictor.list.path)
@@ -23,10 +25,10 @@ df.clinical = readRDS(df.clinical.path)
 # Define the covariates to always include
 covariate.cols = c("genderMale",
                    "age_imputed",
-                   "immResp_MFC_hai_log2_pre_value")
+                   "immResp_MFC_nAb_log2_pre_value")
 
 # Define the response variable to predict
-response.col = "immResp_MFC_hai_log2_post_value"
+response.col = "immResp_MFC_nAb_log2_post_value"
 
 # Number of folds
 K <- 10
@@ -106,7 +108,7 @@ for (data.sel in names(df.predictor.list)) {
     model = "lm",
     metric = "R2",
     criterion = "relative.gain",
-    metric.threshold = 0,
+    metric.threshold = 2,
     include.covariates = TRUE,
     fold.ids = fold.ids
   )

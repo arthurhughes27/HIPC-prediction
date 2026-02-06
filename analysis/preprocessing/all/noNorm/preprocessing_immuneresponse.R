@@ -257,11 +257,34 @@ max_response_MFC_df_hai = max_response_MFC_df_each %>%
   ) %>%
   select(-assay)
 
-# Now merge those dataframes together to get the final immune response data
+mean_response_nAb <- response_MFC_df %>%
+  filter(assay == "nAb") %>%
+  group_by(participant_id, study_accession) %>%
+  summarise(immResp_mean_nAb_pre_value  = mean(response_MFC_pre_value,  na.rm = TRUE),
+            immResp_mean_nAb_post_value = mean(response_MFC_post_value, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(immResp_mean_nAb_log2_pre_value = log2(immResp_mean_nAb_pre_value),
+         immResp_mean_nAb_log2_post_value = log2(immResp_mean_nAb_post_value),
+         immResp_mean_nAb_FC = immResp_mean_nAb_post_value/immResp_mean_nAb_pre_value,
+         immResp_mean_nAb_log2_FC = log2(immResp_mean_nAb_FC))
+
+mean_response_hai <- response_MFC_df %>%
+  filter(assay == "hai") %>%
+  group_by(participant_id, study_accession) %>%
+  summarise(immResp_mean_hai_pre_value  = mean(response_MFC_pre_value,  na.rm = TRUE),
+            immResp_mean_hai_post_value = mean(response_MFC_post_value, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(immResp_mean_hai_log2_pre_value = log2(immResp_mean_hai_pre_value),
+         immResp_mean_hai_log2_post_value = log2(immResp_mean_hai_post_value),
+         immResp_mean_hai_FC = immResp_mean_hai_post_value/immResp_mean_hai_pre_value,
+         immResp_mean_hai_log2_FC = log2(immResp_mean_hai_FC))
+
 hipc_immResp <- list(
   max_response_MFC_df_any,
   max_response_MFC_df_nAb,
-  max_response_MFC_df_hai
+  max_response_MFC_df_hai,
+  mean_response_nAb,
+  mean_response_hai
 ) %>%
   reduce(full_join, by = c("participant_id", "study_accession")) %>%
   arrange(participant_id)

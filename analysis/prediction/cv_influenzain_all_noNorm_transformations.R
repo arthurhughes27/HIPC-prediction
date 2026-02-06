@@ -16,9 +16,13 @@ sapply(list.files("R/", pattern = "\\.R$", full.names = TRUE), source)
 processed_data_folder <- "data"
 # Output folder to save results
 output_folder = fs::path("output", "results")
+
+# Study of interest
+study_of_interest = "SDY67"
+
 # Path for predictor sets
 df.predictor.list.path = fs::path(processed_data_folder,
-                                  "engineered_dataframes_influenzain_all_noNorm.rds")
+                                  paste0("engineered_dataframes_influenzain_all_noNorm_",study_of_interest,".rds"))
 # Path for clinical
 df.clinical.path = fs::path(processed_data_folder, "hipc_merged_clinical_immresp_all_noNorm.rds")
 
@@ -37,7 +41,7 @@ response.col = "immResp_MFC_hai_log2_post_value"
 # Fix the feature selection algorithm
 feature.selection = "none"
 # Fix the predictive model
-model = "elasticnet"
+model = "ranger"
 # Set the seed
 seed = 21012026
 
@@ -61,11 +65,16 @@ total.combinations = length(df.predictor.list) * length(df.predictor.list[["d0"]
 res.list <- list()
 # Set counter
 i <- 1
-for (mod in c("xgboost", "ranger", "elasticnet")) {
+
+mod = "ranger"
+feat.eng.row = "mean"
+feat.eng.col = "none"
+
+# for (mod in c("xgboost", "ranger", "elasticnet")) {
   for (data.sel in names(df.predictor.list)) {
     # For each combination of data selection and transformation
-    for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
-      for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]][-1])) {
+    # for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
+      # for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]][-1])) {
         # Print a progress message
         message(
           sprintf(
@@ -124,9 +133,9 @@ for (mod in c("xgboost", "ranger", "elasticnet")) {
         # Clear the temporary memory
         gc()
       }
-    }
-  }
-}
+#     }
+#   }
+# }
 
 # Bind the metrics into a dataframe
 metrics.df <- bind_rows(res.list)
@@ -147,7 +156,7 @@ fold.ids = fold_df %>%
   pull(fold)
 
 # Compute the cross-validation results
-for (mod in c("lm","xgboost", "ranger", "elasticnet")){
+for (mod in c("lm")){
   baseline_results = cv.predict.baseline(
     df = df,
     predictor.cols = covariate.cols,
@@ -163,6 +172,6 @@ for (mod in c("lm","xgboost", "ranger", "elasticnet")){
 }
 
 # Path to save the results
-p_save <- fs::path(output_folder, "metrics_transformations_allmodels_all_noNorm.rds")
-# Save the results
-saveRDS(metrics.df, p_save)
+# p_save <- fs::path(output_folder, "metrics_transformations_allmodels_all_noNorm.rds")
+# # Save the results
+# saveRDS(metrics.df, p_save)

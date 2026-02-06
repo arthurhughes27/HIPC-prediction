@@ -18,7 +18,7 @@ processed_data_folder <- "data"
 output_folder = fs::path("output", "results")
 # Path for predictor sets
 df.predictor.list.path = fs::path(processed_data_folder,
-                                  "engineered_dataframes_influenzain_all_norm.rds")
+                                  "engineered_dataframes_influenzain_all_norm_SDY1276.rds")
 # Path for clinical
 df.clinical.path = fs::path(processed_data_folder,
                             "hipc_merged_clinical_immresp_all_norm.rds")
