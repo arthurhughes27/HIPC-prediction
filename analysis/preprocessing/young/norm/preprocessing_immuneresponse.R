@@ -19,7 +19,7 @@ processed_data_folder = "data"
 # Use fs::path() to specify the data paths robustly
 p_load_nAb <- fs::path(raw_data_folder, "neut_ab_titer_2025-01-10_01-13-22.xlsx")
 p_load_hai <- fs::path(raw_data_folder, "hai_2025-01-10_01-13-41.xlsx")
-p_load_clinical <- fs::path(processed_data_folder, "hipc_clinical_young_norm.rds")
+p_load_clinical <- fs::path(processed_data_folder, "hipc_clinical_all_noNorm.rds")
 
 # HAI response data
 response_hai = read_excel(p_load_hai) %>%
@@ -30,11 +30,11 @@ response_nAb = read_excel(p_load_nAb) %>%
   clean_names()
 
 # Clinical data for filtration of participants
-hipc_clinical_young_norm = readRDS(p_load_clinical)
+hipc_clinical_all_noNorm = readRDS(p_load_clinical)
 
 # First, filter each dataframe to only contain information on participants for which we have gene expression data
 # Find identifiers of participants with gene expression measurements
-participants = hipc_clinical_young_norm %>%
+participants = hipc_clinical_all_noNorm %>%
   pull(participant_id) %>%
   unique()
 
@@ -63,7 +63,7 @@ raw_response_influenzain = bind_rows(response_nAb, response_hai) %>%
   distinct()
 
 # First get the studies and other clinical data corresponding to each participant id
-hipc_studies = hipc_clinical_young_norm %>%
+hipc_studies = hipc_clinical_all_noNorm %>%
   select(participant_id,
          age_imputed,
          gender,
@@ -75,9 +75,9 @@ hipc_studies = hipc_clinical_young_norm %>%
 
 # Merge the study names into the immune response data (it is not directly given)
 raw_response_influenzain = merge(x = raw_response_influenzain,
-                                    y = hipc_studies,
-                                    by = "participant_id",
-                                    all = F) %>%
+                                 y = hipc_studies,
+                                 by = "participant_id",
+                                 all = F) %>%
   select(
     participant_id,
     study_accession,
@@ -102,7 +102,7 @@ raw_response_influenzain = raw_response_influenzain %>%
   ))
 
 # Use fs::path() to specify the data path robustly
-p_save <- fs::path(processed_data_folder, "raw_response_influenzain_young_norm.rds")
+p_save <- fs::path(processed_data_folder, "raw_response_influenzain_all_noNorm.rds")
 
 # Save dataframe
 saveRDS(raw_response_influenzain, file = p_save)
@@ -257,11 +257,34 @@ max_response_MFC_df_hai = max_response_MFC_df_each %>%
   ) %>%
   select(-assay)
 
-# Now merge those dataframes together to get the final immune response data
+mean_response_nAb <- response_MFC_df %>%
+  filter(assay == "nAb") %>%
+  group_by(participant_id, study_accession) %>%
+  summarise(immResp_mean_nAb_pre_value  = mean(response_MFC_pre_value,  na.rm = TRUE),
+            immResp_mean_nAb_post_value = mean(response_MFC_post_value, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(immResp_mean_nAb_log2_pre_value = log2(immResp_mean_nAb_pre_value),
+         immResp_mean_nAb_log2_post_value = log2(immResp_mean_nAb_post_value),
+         immResp_mean_nAb_FC = immResp_mean_nAb_post_value/immResp_mean_nAb_pre_value,
+         immResp_mean_nAb_log2_FC = log2(immResp_mean_nAb_FC))
+
+mean_response_hai <- response_MFC_df %>%
+  filter(assay == "hai") %>%
+  group_by(participant_id, study_accession) %>%
+  summarise(immResp_mean_hai_pre_value  = mean(response_MFC_pre_value,  na.rm = TRUE),
+            immResp_mean_hai_post_value = mean(response_MFC_post_value, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(immResp_mean_hai_log2_pre_value = log2(immResp_mean_hai_pre_value),
+         immResp_mean_hai_log2_post_value = log2(immResp_mean_hai_post_value),
+         immResp_mean_hai_FC = immResp_mean_hai_post_value/immResp_mean_hai_pre_value,
+         immResp_mean_hai_log2_FC = log2(immResp_mean_hai_FC))
+
 hipc_immResp <- list(
   max_response_MFC_df_any,
   max_response_MFC_df_nAb,
-  max_response_MFC_df_hai
+  max_response_MFC_df_hai,
+  mean_response_nAb,
+  mean_response_hai
 ) %>%
   reduce(full_join, by = c("participant_id", "study_accession")) %>%
   arrange(participant_id)

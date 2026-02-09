@@ -46,9 +46,7 @@ cv.predict.specification = function(study_of_interest,
   
   # Path for clinical
   df.clinical.path = fs::path(processed_data_folder,
-                              "hipc_merged_clinical_immresp_",
-                              dataset,
-                              ".rds")
+                              paste0("hipc_merged_clinical_immresp_", dataset, ".rds"))
   
   # Load the data
   df.predictor.list = readRDS(df.predictor.list.path)
@@ -106,8 +104,9 @@ cv.predict.specification = function(study_of_interest,
   
   diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
   
-  message(sprintf("Completed in %.1f mins.", diff.time))
+  print(message(sprintf("Completed in %.1f mins.", diff.time)))
   
-  print(res$metrics)
+  print(res$metrics$R2)
   print(res$prediction.plot)
+  return(res)
 }
