@@ -156,7 +156,7 @@ compute_row_transformation = function(df,
     if (ncol(expr_mat_gs) == 0) {
       transformed <- rep(NA_real_, nrow(expr_mat_gs))
     } else if (transformation == "pc1") {
-      # Remove all constant columns 
+      # Remove all constant columns
       pca_res <- stats::prcomp(expr_mat_gs, center = TRUE, scale. = TRUE)
       transformed <- as.numeric(pca_res$x[, 1])
     } else {
@@ -263,7 +263,7 @@ engineer_expression_data <- function(study_of_interest,
   
   gene_names <- hipc_merged_all_noNorm_filtered %>%
     dplyr::select(a1cf:zzz3) %>%
-    dplyr::select(where( ~ !any(is.na(.)))) %>%
+    dplyr::select(where(~ !any(is.na(.)))) %>%
     colnames()
   
   
