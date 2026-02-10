@@ -51,7 +51,7 @@ cv.predict = function(df.predictor.list,
     }
     
     # Merge these into one dataframe
-    df.all = right_join(x = df.clinical, y = df.predictors, by = "participant_id") %>%
+    df.all = inner_join(x = df.clinical, y = df.predictors, by = "participant_id") %>%
       distinct() %>%
       drop_na()
     
