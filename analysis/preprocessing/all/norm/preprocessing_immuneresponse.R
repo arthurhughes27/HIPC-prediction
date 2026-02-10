@@ -89,18 +89,6 @@ raw_response_influenzain = merge(x = raw_response_influenzain,
     value_preferred
   )
 
-
-# There are a series of study-specific errors which have been inferred from the "immuneResponseCallGeneration.R" script in the ImmuneSignatures2 GitHub page.
-# We fix these here.
-# First, "SDY1276" is apparently scaled in log4.
-
-raw_response_influenzain = raw_response_influenzain %>%
-  mutate(value_preferred = if_else(
-    study_accession == "SDY1276",
-    4^value_preferred,
-    value_preferred
-  ))
-
 # Use fs::path() to specify the data path robustly
 p_save <- fs::path(processed_data_folder, "raw_response_influenzain_all_noNorm.rds")
 
@@ -140,9 +128,6 @@ merged_vax <- full_join(
   by = c("participant_id", "study_accession","response_strain_analyte", "assay"),
   relationship = "many-to-many"
 ) %>%
-  # mutate(genderMale = genderMale.x,
-  #        age_imputed = age_imputed.x,
-  #        study_accession = study_accession.x) %>%
   select(
     participant_id,
     study_accession,

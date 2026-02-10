@@ -6,8 +6,19 @@ cv.predict.baseline = function(df,
                                model = "lm",
                                n.folds = NULL,
                                fold.ids = NULL,
-                               seed = 12345) {
+                               seed = 12345,
+                               gender.select = NULL) {
   set.seed(seed)
+  
+  if (!is.null(gender.select)) {
+    if (gender.select == "Male") {
+      df = df %>%
+        filter(genderMale == 1)
+    } else if (gender.select == "Female") {
+      df = df %>%
+        filter(genderMale == 0)
+    }
+  }
   
   ### CROSS-VALIDATION ###
   

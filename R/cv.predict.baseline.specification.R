@@ -10,11 +10,12 @@ cv.predict.baseline.specification = function(study_of_interest,
                                              feat.eng.col,
                                              feat.eng.row,
                                              feat.select,
-                                             feature.select.metric,
-                                             feature.select.metric.threshold,
-                                             feature.select.model,
-                                             feature.select.criterion,
-                                             n.cores) {
+                                             feat.select.metric,
+                                             feat.select.metric.threshold,
+                                             feat.select.model,
+                                             feat.select.criterion,
+                                             n.cores,
+                                             gender.select = NULL) {
   # Libraries
   library(tidyverse)
   library(fs)
@@ -52,9 +53,24 @@ cv.predict.baseline.specification = function(study_of_interest,
   df.predictor.list = readRDS(df.predictor.list.path)
   df.clinical = readRDS(df.clinical.path)
   
+  if (!is.null(gender.select)) {
+    if (gender.select == "Male") {
+      df.clinical = df.clinical %>%
+        filter(genderMale == 1)
+    } else if (gender.select == "Female") {
+      df.clinical = df.clinical %>%
+        filter(genderMale == 0)
+    }
+  }
+  
   # Generate the fold on the union of participant ids
-  ids = df.predictor.list[["d0"]][["none"]][["none"]] %>%
+  ids_exp = df.predictor.list[["d0"]][["none"]][["none"]] %>%
     pull(participant_id)
+  
+  ids_clinical = df.clinical %>% 
+    pull(participant_id)
+  
+  ids = intersect(ids_exp, ids_clinical)
   
   # Number of participants
   n = length(ids)
@@ -91,7 +107,8 @@ cv.predict.baseline.specification = function(study_of_interest,
     model = mod,
     fold.ids = fold.ids,
     seed = seed,
-    n.folds = NULL
+    n.folds = NULL,
+    gender.select = NULL
   )
   
   print(res$metrics$R2)

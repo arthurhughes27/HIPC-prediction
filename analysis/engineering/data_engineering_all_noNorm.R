@@ -368,7 +368,7 @@ engineer_expression_data <- function(study_of_interest,
 }
 
 engineer_expression_data(
-  study_of_interest = "SDY67",
-  timepoints_of_interest = c(0, 3),
+  study_of_interest = "SDY1276",
+  timepoints_of_interest = c(0, 1, 3),
   processed_data_folder = "data"
 )

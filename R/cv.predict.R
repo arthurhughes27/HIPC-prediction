@@ -17,10 +17,21 @@ cv.predict = function(df.predictor.list,
                       fold.ids = NULL,
                       seed = 12345,
                       n.cores = 1,
-                      include.covariates = TRUE) {
+                      include.covariates = TRUE,
+                      gender.select = NULL) {
   set.seed(seed)
   
   ### DATA SELECTION & FEATURE ENGINEERING ###
+  
+  if (!is.null(gender.select)) {
+    if (gender.select == "Male") {
+      df.clinical = df.clinical %>%
+        filter(genderMale == 1)
+    } else if (gender.select == "Female") {
+      df.clinical = df.clinical %>%
+        filter(genderMale == 0)
+    }
+  }
   
   # Select data from the engineered list according to the user parameter
   if (data.selection %in% names(df.predictor.list)) {
@@ -39,10 +50,10 @@ cv.predict = function(df.predictor.list,
                all_of(response.col))
     }
     
-    
     # Merge these into one dataframe
     df.all = right_join(x = df.clinical, y = df.predictors, by = "participant_id") %>%
-      distinct()
+      distinct() %>%
+      drop_na()
     
   } else {
     pids_to_retain = df.predictor.list[[1]][[1]][[1]] %>%
