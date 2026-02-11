@@ -231,8 +231,6 @@ metrics.df = metrics.df %>%
 # Path to save the results
 file_name = paste0(
   "metrics_transformations_",
-  mod,
-  "_",
   dataset_of_interest,
   "_",
   study_of_interest,
