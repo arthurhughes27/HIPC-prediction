@@ -19,7 +19,8 @@ cv.predict.ranger = function(df,
                              mtry.values = NULL,
                              min.node.size.values = NULL,
                              baseline = FALSE,
-                             n.cores = 1) {
+                             n.cores = 1,
+                             gender.select = NULL) {
   # -------------------------
   # Reproducibility
   # -------------------------
@@ -311,6 +312,7 @@ cv.predict.ranger = function(df,
   if (baseline) {
     metrics <- data.frame(
       "data.selection" = "baseline",
+      "gender.select" = ifelse(is.null(gender.select), "none", gender.select),
       "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col" = "baseline",
       "feature.engineering.row" = "baseline",
@@ -330,6 +332,7 @@ cv.predict.ranger = function(df,
   } else {
     metrics <- data.frame(
       "data.selection" = data.selection,
+      "gender.select" = ifelse(is.null(gender.select), "none", gender.select),
       "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col" = feature.engineering.col,
       "feature.engineering.row" = feature.engineering.row,

@@ -15,10 +15,11 @@ cv.predict.elasticnet = function(df,
                                  feature.selection.include.covariates = TRUE,
                                  seed = 12345,
                                  n.folds.inner = 5,
-                                 alpha.values = seq(0.01, 1, 0.1),
+                                 alpha.values = seq(0.01, 1, 0.05),
                                  nlambda = 5,
                                  baseline = FALSE,
-                                 n.cores = 1) {
+                                 n.cores = 1,
+                                 gender.select = NULL) {
   # Reproducibility
   set.seed(seed)
   
@@ -282,6 +283,7 @@ cv.predict.elasticnet = function(df,
   if (baseline) {
     metrics <- data.frame(
       "data.selection" = "baseline",
+      "gender.select" = ifelse(is.null(gender.select), "none", gender.select),
       "include.covariates" = feature.selection.include.covariates, 
       "feature.engineering.col" = "baseline",
       "feature.engineering.row" = "baseline",
@@ -301,6 +303,7 @@ cv.predict.elasticnet = function(df,
   } else {
     metrics <- data.frame(
       "data.selection" = data.selection,
+      "gender.select" = ifelse(is.null(gender.select), "none", gender.select),
       "include.covariates" = feature.selection.include.covariates, 
       "feature.engineering.col" = feature.engineering.col,
       "feature.engineering.row" = feature.engineering.row,

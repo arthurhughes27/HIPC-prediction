@@ -22,11 +22,17 @@ output_folder = fs::path("output", "results")
 # Study of interest
 study_of_interest = "SDY1276"
 
-# Dataset of interest 
+# Dataset of interest
 dataset_of_interest = "all_noNorm"
 
 # Assay of interest
 assay_of_interest = "hai"
+
+# Gender of interest
+gender_of_interest = "Male"
+
+# Model of interest
+model_of_interest = "elasticnet"
 
 # Path for predictor sets
 df.predictor.list.path = fs::path(
@@ -51,12 +57,15 @@ df.predictor.list = readRDS(df.predictor.list.path)
 df.clinical = readRDS(df.clinical.path)
 
 # Define the covariates to always include
-covariate.cols = c("genderMale", "age_imputed"
-                   , paste0("immResp_mean_",assay_of_interest,"_pre_value")
-                   )
+covariate.cols = c(
+  "genderMale",
+  "age_imputed"
+  ,
+  paste0("immResp_mean_", assay_of_interest, "_pre_value")
+)
 
 # Define the response variable to predict
-response.col = paste0("immResp_mean_",assay_of_interest,"_post_value")
+response.col = paste0("immResp_mean_", assay_of_interest, "_post_value")
 
 # Generate the fold on the union of participant ids
 ids = df.predictor.list[["d0"]][["none"]][["none"]] %>%
@@ -75,18 +84,15 @@ fold_id <- sample(rep(1:K, length.out = n))
 fold_df <- tibble(participant_id = ids, fold = fold_id)
 
 # Calculate total number of iterations to do
-total.combinations = length(names(df.predictor.list)) * length(names(df.predictor.list[["d0"]][["none"]]))
+total.combinations = length(names(df.predictor.list)) * length(names(df.predictor.list[["d0"]][["none"]])) * length(names(df.predictor.list[["d0"]]))
 
 # Initialise results list
 res.list <- list()
 # Set counter
 i <- 1
 
-# Fix the model to random forest
-mod = "elasticnet"
-
 # Fix the feature engineering pre-transformation to none
-feat.eng.col = "none"
+# feat.eng.col = "none"
 
 # Fix the feature selection parameters
 feature.selection = "none"
@@ -98,90 +104,89 @@ feature.selection.criterion = "relative.gain"
 # Set the seed
 seed = 10022026
 
-# Fix the gender
-gender.select = "Female"
-
 for (data.sel in names(df.predictor.list)) {
-  for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])) {
-    # Print a progress message
-    message(
-      sprintf(
-        "Running data.selection = %s | feat.eng.col = %s | feat.eng.row = %s | iteration = %d of %d | model = %s",
-        data.sel,
-        feat.eng.col,
-        feat.eng.row,
-        i,
-        total.combinations,
-        mod
+  for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
+    for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])) {
+      # Print a progress message
+      message(
+        sprintf(
+          "Running data.selection = %s | feat.eng.col = %s | feat.eng.row = %s | iteration = %d of %d | model = %s",
+          data.sel,
+          feat.eng.col,
+          feat.eng.row,
+          i,
+          total.combinations,
+          model_of_interest
+        )
       )
-    )
-    in.time = Sys.time()
-    
-    if (!is.null(gender.select)) {
-      if (gender.select == "Male") {
-        df.clinical = df.clinical %>%
-          filter(genderMale == 1)
-      } else if (gender.select == "Female") {
-        df.clinical = df.clinical %>%
-          filter(genderMale == 0)
+      in.time = Sys.time()
+      
+      if (!is.null(gender_of_interest)) {
+        if (gender_of_interest == "Male") {
+          df.clinical = df.clinical %>%
+            filter(genderMale == 1)
+        } else if (gender_of_interest == "Female") {
+          df.clinical = df.clinical %>%
+            filter(genderMale == 0)
+        }
       }
+      
+      # Extract the correct dataframe
+      df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
+      
+      # Extract the relevant participant identifiers
+      pids.expr = df.temp %>%
+        pull(participant_id)
+      
+      pids.clinical = df.clinical %>%
+        pull(participant_id)
+      
+      pids.temp = intersect(pids.expr, pids.clinical)
+      
+      
+      # Extract the relevant folds
+      fold.ids = fold_df %>%
+        filter(participant_id %in% pids.temp) %>%
+        pull(fold)
+      
+      # Cross-validation
+      res = cv.predict(
+        df.predictor.list = df.predictor.list,
+        df.clinical = df.clinical,
+        covariate.cols = covariate.cols,
+        response.col = response.col,
+        data.selection = data.sel,
+        feature.engineering.col = feat.eng.col,
+        feature.engineering.row = feat.eng.row,
+        feature.selection = feature.selection,
+        feature.selection.metric = feature.selection.metric,
+        feature.selection.metric.threshold = feature.selection.metric.threshold,
+        feature.selection.model = feature.selection.model,
+        feature.selection.criterion = feature.selection.criterion,
+        model = model_of_interest,
+        fold.ids = fold.ids,
+        seed = seed,
+        n.cores = 1,
+        gender_of_interest = gender_of_interest
+      )
+      
+      out.time = Sys.time()
+      
+      diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
+      
+      message(sprintf("Completed in %.1f mins.", diff.time))
+      
+      
+      # Store the metrics
+      res.list[[i]] <- res[["metrics"]]
+      # Iterate the counter
+      i <- i + 1
+      
+      print(res[["metrics"]]$R2)
+      
+      # Clear the temporary memory
+      gc()
     }
-    
-    # Extract the correct dataframe
-    df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
-    
-    # Extract the relevant participant identifiers
-    pids.expr = df.temp %>%
-      pull(participant_id)
-    
-    pids.clinical = df.clinical %>%
-      pull(participant_id)
-    
-    pids.temp = intersect(pids.expr, pids.clinical)
-    
-    
-    # Extract the relevant folds
-    fold.ids = fold_df %>%
-      filter(participant_id %in% pids.temp) %>%
-      pull(fold)
-    
-    # Cross-validation
-    res = cv.predict(
-      df.predictor.list = df.predictor.list,
-      df.clinical = df.clinical,
-      covariate.cols = covariate.cols,
-      response.col = response.col,
-      data.selection = data.sel,
-      feature.engineering.col = feat.eng.col,
-      feature.engineering.row = feat.eng.row,
-      feature.selection = feature.selection,
-      feature.selection.metric = feature.selection.metric,
-      feature.selection.metric.threshold = feature.selection.metric.threshold,
-      feature.selection.model = feature.selection.model,
-      feature.selection.criterion = feature.selection.criterion,
-      model = mod,
-      fold.ids = fold.ids,
-      seed = seed,
-      n.cores = 1,
-      gender.select = gender.select
-    )
-    
-    out.time = Sys.time()
-    
-    diff.time <- as.numeric(difftime(out.time, in.time, units = "mins"))
-    
-    message(sprintf("Completed in %.1f mins.", diff.time))
-    
-    
-    # Store the metrics
-    res.list[[i]] <- res[["metrics"]]
-    # Iterate the counter
-    i <- i + 1
-    
-    print(res[["metrics"]]$R2)
-    
-    # Clear the temporary memory
-    gc()
   }
 }
 
@@ -213,14 +218,14 @@ for (mod in c("lm")) {
     fold.ids = fold.ids,
     seed = seed,
     n.folds = NULL,
-    gender.select = gender.select
+    gender_of_interest = gender_of_interest
   )
   
   # Bind the baseline results to the metrics
   metrics.df = bind_rows(metrics.df, baseline_results$metrics)
 }
 
-metrics.df = metrics.df %>% 
+metrics.df = metrics.df %>%
   arrange(desc(R2))
 
 # Path to save the results
@@ -234,7 +239,9 @@ file_name = paste0(
   "_",
   assay_of_interest,
   "_",
-  gender.select,
+  gender_of_interest,
+  "_",
+  model_of_interest,
   ".rds"
 )
 

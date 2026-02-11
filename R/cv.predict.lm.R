@@ -15,7 +15,8 @@ cv.predict.lm = function(df,
                          feature.selection.include.covariates = TRUE,
                          n.folds.inner = 5,
                          seed = 12345,
-                         baseline = FALSE) {
+                         baseline = FALSE,
+                         gender.select = NULL) {
   # Reproducibility
   set.seed(seed)
   
@@ -175,6 +176,7 @@ cv.predict.lm = function(df,
   if (baseline) {
     metrics <- data.frame(
       "data.selection"             = "baseline",
+      "gender.select" = ifelse(is.null(gender.select), "none", gender.select),
       "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col"    = "baseline",
       "feature.engineering.row"    = "baseline",
@@ -194,6 +196,7 @@ cv.predict.lm = function(df,
   } else {
     metrics <- data.frame(
       "data.selection"             = data.selection,
+      "gender.select" = ifelse(is.null(gender.select), "none", gender.select),
       "include.covariates" = feature.selection.include.covariates,
       "feature.engineering.col"    = feature.engineering.col,
       "feature.engineering.row"    = feature.engineering.row,
