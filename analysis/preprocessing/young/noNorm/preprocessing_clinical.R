@@ -290,9 +290,6 @@ hipc_clinical_young_noNorm$study_colour <-
 # Final dataframe to be saved has samples as rows and variables as columns
 dim(hipc_clinical_young_noNorm)
 
-hipc_clinical_young_noNorm = hipc_clinical_young_noNorm %>% 
-  filter(vaccine_name == "Influenza (IN)")
-
 # Save processed dataframe
 
 # Specify folder within folder root where the processed data lives
