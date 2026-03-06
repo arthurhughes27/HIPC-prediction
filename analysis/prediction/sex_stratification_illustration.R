@@ -46,6 +46,9 @@ response_transformation_of_interest = "mean"
 # Response value of interest
 response_value_of_interest = "post_value"
 
+# Standardised response prior to aggregation?
+response_standardised = TRUE
+
 # Path for predictor sets
 df.predictor.list.path = fs::path(
   processed_data_folder,
@@ -77,14 +80,15 @@ response.col = paste0("immResp_",
                       response_transformation_of_interest,
                       "_", 
                       assay_of_interest, 
-                      "_std_",
+                      ifelse(response_standardised, "_std_", "_log2_"),
                       response_value_of_interest)
 
 response.col.pre = paste0("immResp_",
                           response_transformation_of_interest,
                           "_", 
                           assay_of_interest, 
-                          "_std_pre_value")
+                          ifelse(response_standardised, "_std_", "_log2_"),
+                          "pre_value")
 
 # Define the covariates to always include
 covariate.cols = c(
@@ -175,7 +179,7 @@ res = cv.predict(
   df.clinical = df.clinical,
   covariate.cols = covariate.cols,
   response.col = response.col,
-  data.selection = "d1",
+  data.selection = "d1+d3",
   feature.engineering.col = "z",
   feature.engineering.row = "mean",
   feature.selection = "none",
@@ -729,38 +733,20 @@ ggsave(
 
 # Now add gene expression, day 1, elastic net model
 
-# Extract the correct dataframe
-df.temp = df.predictor.list[["d3"]][["none"]][["mean"]]
-
-# Extract the relevant participant identifiers
-pids.expr = df.temp %>%
-  pull(participant_id)
-
-pids.clinical = df.clinical %>%
-  pull(participant_id)
-
-pids.temp = intersect(pids.expr, pids.clinical)
-
-
-# Extract the relevant folds
-fold.ids = fold_df %>%
-  filter(participant_id %in% pids.temp) %>%
-  pull(fold)
-
 # Cross-validation
 res = cv.predict(
   df.predictor.list = df.predictor.list,
   df.clinical = df.clinical,
-  covariate.cols = covariate.cols,
+  covariate.cols = covariate.cols[-1],
   response.col = response.col,
-  data.selection = "d3",
-  feature.engineering.col = "z",
+  data.selection = "d0+d1+d3",
+  feature.engineering.col = "none",
   feature.engineering.row = "mean",
-  feature.selection = "univariate",
+  feature.selection = "variance",
   feature.selection.metric = "R2",
-  feature.selection.metric.threshold = 2,
+  feature.selection.metric.threshold = 250,
   feature.selection.model = "lm",
-  feature.selection.criterion = "relative.gain",
+  feature.selection.criterion = "topN",
   model = "elasticnet",
   fold.ids = fold.ids,
   seed = seed,

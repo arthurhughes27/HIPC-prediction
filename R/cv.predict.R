@@ -36,7 +36,7 @@ cv.predict = function(df.predictor.list,
   # Select data from the engineered list according to the user parameter
   if (data.selection %in% names(df.predictor.list)) {
     df.predictors = df.predictor.list[[data.selection]][[feature.engineering.col]][[feature.engineering.row]] %>%
-      select(-study_time_collected)
+      dplyr::select(-any_of("study_time_collected"))
     
     # Select relevant columns from the clinical data
     if (include.covariates){

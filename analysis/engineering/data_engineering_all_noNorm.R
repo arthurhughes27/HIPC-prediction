@@ -385,6 +385,56 @@ engineer_expression_data <- function(study_of_interest,
     }
   }
   
+  # ---------------------------------------------------------------------
+  # Add cumulative-timepoint dataframes (e.g. "d0+d1", "d0+d3", "d0+d1+d3")
+  # - Combine only the base timepoint datasets ("dX") defined by timepoints_of_interest
+  # - Combine AFTER all transformations, by column-binding predictor columns
+  # - Append "_dX" to each predictor column to indicate its origin
+  # - Assumes all relevant dataframes exist and are harmonised (same participant order)
+  # ---------------------------------------------------------------------
+  
+  base_names <- paste0("d", timepoints_of_interest)     
+  # all combinations of length >= 2
+  combos <- unlist(lapply(2:length(base_names), function(k) combn(base_names, k, simplify = FALSE)), recursive = FALSE)
+  
+  for (combo in combos) {
+    new_top <- paste(combo, collapse = "+")   
+    engineered[[new_top]] <- list()
+    # use second-level names from any existing base (take first base)
+    col_tf_names <- names(engineered[[ base_names[1] ]])
+    
+    for (col_tf in col_tf_names) {
+      engineered[[new_top]][[col_tf]] <- list()
+      row_tf_names <- names(engineered[[ base_names[1] ]][[col_tf]])
+      
+      for (row_tf in row_tf_names) {
+        # gather the data.frames for each timepoint in the combo
+        dfs <- lapply(combo, function(bn) engineered[[bn]][[col_tf]][[row_tf]])
+        
+        # build list of predictor-only matrices with renamed columns
+        pred_mats <- lapply(seq_along(dfs), function(i) {
+          df_i <- dfs[[i]]
+          # predictor columns = all except participant_id and time_col
+          preds <- setdiff(colnames(df_i), c("participant_id", time_col))
+          # select predictor columns and rename with suffix _dX
+          df_i %>%
+            dplyr::select(all_of(preds)) %>%
+            dplyr::rename_with(~ paste0(.x, "_", combo[i]), .cols = everything())
+        })
+        
+        # combine: keep participant_id from first df, cbind all predictor mats
+        combined <- cbind(
+          participant_id = dfs[[1]]$participant_id,
+          do.call(cbind, pred_mats)
+        )
+        
+        # assign to engineered nested list
+        engineered[[new_top]][[col_tf]][[row_tf]] <- as.data.frame(combined, stringsAsFactors = FALSE)
+      }
+    }
+  }
+  # ---------------------------------------------------------------------
+  
   
   p_save <- fs::path(
     processed_data_folder,

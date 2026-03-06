@@ -8,13 +8,19 @@ library(xgboost)
 library(foreach)
 library(parallel)
 
+seed = 04032026
+
 # Source internal functions
 sapply(list.files("R/", pattern = "\\.R$", full.names = TRUE), source)
 
 # Data folder
 processed_data_folder <- "data"
+
 # Output folder to save results
 output_folder = fs::path("output", "results")
+
+# Figures folder to store graphics
+figures_folder = fs::path("output", "figures", "diagnosis")
 
 # Study of interest
 study_of_interest = "SDY1276"
@@ -26,7 +32,7 @@ dataset_of_interest = "all_noNorm"
 assay_of_interest = "nAb"
 
 # Gender of interest
-gender_of_interest = "Female"
+gender_of_interest = "none"
 
 # Model of interest
 model_of_interest = "elasticnet"
@@ -39,6 +45,9 @@ response_transformation_of_interest = "mean"
 
 # Response value of interest
 response_value_of_interest = "post_value"
+
+# Standardised response prior to aggregation?
+response_standardised = TRUE
 
 # Path for predictor sets
 df.predictor.list.path = fs::path(
@@ -62,27 +71,32 @@ df.clinical.path = fs::path(
 
 # Load the data
 df.predictor.list = readRDS(df.predictor.list.path)
-df.clinical = readRDS(df.clinical.path)
+df.clinical = readRDS(df.clinical.path) %>% 
+  mutate(ethnicityHisp = ifelse(ethnicity == "Hispanic or Latino", 1, 0),
+         ethnicityOther = ifelse(ethnicity == "Other", 1, 0),)
 
 # Define the response variable to predict
 response.col = paste0("immResp_",
                       response_transformation_of_interest,
                       "_", 
                       assay_of_interest, 
-                      "_log2_", 
+                      ifelse(response_standardised, "_std_", "_log2_"),
                       response_value_of_interest)
 
 response.col.pre = paste0("immResp_",
                           response_transformation_of_interest,
                           "_", 
                           assay_of_interest, 
-                          "_log2_pre_value")
+                          ifelse(response_standardised, "_std_", "_log2_"),
+                          "pre_value")
 
 # Define the covariates to always include
 covariate.cols = c(
   "genderMale",
-  "age_imputed",
-  response.col.pre
+  "age_imputed"#,
+  # "ethnicityHisp",
+  # "ethnicityOther",
+  # response.col.pre
 )
 
 # Generate the fold on the union of participant ids
@@ -93,13 +107,22 @@ ids = df.predictor.list[["d0"]][["none"]][["none"]] %>%
 n = length(ids)
 
 # Number of folds
-K <- 5
+K <- 10
 
-# Randomly sampled fold ids
-fold_id <- sample(rep(1:K, length.out = n))
+# Get concerned participants
+pid_df <- df.clinical %>%
+  filter(participant_id %in% ids) %>%  # ensure same set
+  distinct(participant_id, !!rlang::sym(response.col), .keep_all = TRUE)
 
-# Attribute fold ids to individuals
-fold_df <- tibble(participant_id = ids, fold = fold_id)
+# Generate folds with internal function balanced on covariates and response
+
+fold_df = balance_folds(df = pid_df, 
+                        ind.col = "participant_id",
+                        covariate.cols = c(response.col),
+                        n.folds = K,
+                        n.continuous.split = 5)
+
+fold.ids = fold_df$fold
 
 # Calculate total number of iterations to do
 total.combinations = length(names(df.predictor.list)) * length(names(df.predictor.list[["d0"]][["none"]])) * length(names(df.predictor.list[["d0"]]))
@@ -149,24 +172,6 @@ for (data.sel in names(df.predictor.list)) {
             filter(genderMale == 0)
         }
       }
-      
-      # Extract the correct dataframe
-      df.temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
-      
-      # Extract the relevant participant identifiers
-      pids.expr = df.temp %>%
-        pull(participant_id)
-      
-      pids.clinical = df.clinical %>%
-        pull(participant_id)
-      
-      pids.temp = intersect(pids.expr, pids.clinical)
-      
-      
-      # Extract the relevant folds
-      fold.ids = fold_df %>%
-        filter(participant_id %in% pids.temp) %>%
-        pull(fold)
       
       # Cross-validation
       res = cv.predict(
@@ -218,15 +223,6 @@ df = df.clinical %>%
   filter(participant_id %in% ids) %>%
   select(participant_id, all_of(covariate.cols), all_of(response.col)) %>%
   distinct()
-
-# Get the relevant participant ids
-pids.temp = df.clinical %>%
-  pull(participant_id)
-
-# Extract the relevant folds
-fold.ids = fold_df %>%
-  filter(participant_id %in% pids.temp) %>%
-  pull(fold)
 
 # Compute the cross-validation results
 for (mod in c("lm")) {
