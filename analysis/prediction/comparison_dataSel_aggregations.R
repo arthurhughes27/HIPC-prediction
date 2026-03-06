@@ -1,7 +1,4 @@
 # R script to perform prediction on a given study dataset and compare data selection and geneset aggregation approaches
-
-# Script to derive cross-validated predictions for inactivated influenza vaccine
-
 # Libraries
 library(tidyverse)
 library(fs)
@@ -26,19 +23,30 @@ study_of_interest = "SDY1276"
 dataset_of_interest = "all_noNorm"
 
 # Assay of interest
-assay_of_interest = "hai"
+assay_of_interest = "nAb"
 
 # Gender of interest
-gender_of_interest = "Male"
+gender_of_interest = "Female"
 
 # Model of interest
 model_of_interest = "elasticnet"
+
+# Vaccine of interest 
+vaccine_of_interest = "Influenza (IN)"
+
+# Response transformation of interest
+response_transformation_of_interest = "mean"
+
+# Response value of interest
+response_value_of_interest = "post_value"
 
 # Path for predictor sets
 df.predictor.list.path = fs::path(
   processed_data_folder,
   paste0(
-    "engineered_dataframes_influenzain_",
+    "engineered_dataframes_",
+    gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+    "_",
     dataset_of_interest,
     "_",
     study_of_interest,
@@ -56,16 +64,26 @@ df.clinical.path = fs::path(
 df.predictor.list = readRDS(df.predictor.list.path)
 df.clinical = readRDS(df.clinical.path)
 
+# Define the response variable to predict
+response.col = paste0("immResp_",
+                      response_transformation_of_interest,
+                      "_", 
+                      assay_of_interest, 
+                      "_log2_", 
+                      response_value_of_interest)
+
+response.col.pre = paste0("immResp_",
+                          response_transformation_of_interest,
+                          "_", 
+                          assay_of_interest, 
+                          "_log2_pre_value")
+
 # Define the covariates to always include
 covariate.cols = c(
   "genderMale",
-  "age_imputed"
-  ,
-  paste0("immResp_mean_", assay_of_interest, "_pre_value")
+  "age_imputed",
+  response.col.pre
 )
-
-# Define the response variable to predict
-response.col = paste0("immResp_mean_", assay_of_interest, "_post_value")
 
 # Generate the fold on the union of participant ids
 ids = df.predictor.list[["d0"]][["none"]][["none"]] %>%
@@ -75,7 +93,7 @@ ids = df.predictor.list[["d0"]][["none"]][["none"]] %>%
 n = length(ids)
 
 # Number of folds
-K <- 10
+K <- 5
 
 # Randomly sampled fold ids
 fold_id <- sample(rep(1:K, length.out = n))
@@ -107,6 +125,7 @@ seed = 10022026
 for (data.sel in names(df.predictor.list)) {
   for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
     for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])) {
+    
       # Print a progress message
       message(
         sprintf(
@@ -167,7 +186,7 @@ for (data.sel in names(df.predictor.list)) {
         fold.ids = fold.ids,
         seed = seed,
         n.cores = 1,
-        gender_of_interest = gender_of_interest
+        gender.select = gender_of_interest
       )
       
       out.time = Sys.time()
@@ -183,6 +202,7 @@ for (data.sel in names(df.predictor.list)) {
       i <- i + 1
       
       print(res[["metrics"]]$R2)
+      print(res$prediction.plot)
       
       # Clear the temporary memory
       gc()
@@ -218,7 +238,7 @@ for (mod in c("lm")) {
     fold.ids = fold.ids,
     seed = seed,
     n.folds = NULL,
-    gender_of_interest = gender_of_interest
+    gender.select = gender_of_interest
   )
   
   # Bind the baseline results to the metrics
@@ -231,6 +251,8 @@ metrics.df = metrics.df %>%
 # Path to save the results
 file_name = paste0(
   "metrics_transformations_",
+  gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+  "_",
   dataset_of_interest,
   "_",
   study_of_interest,

@@ -1,7 +1,12 @@
 # Function to produce cross-validation predicted vs observed plot
 
-cv.plot = function(pred, obs) {
-  predictions = data.frame(obs = obs, pred = pred)
+cv.plot = function(pred, obs, ind = NULL) {
+  if (is.null(ind)){
+    ind = "none"
+  }
+  
+  predictions = data.frame(obs = obs, pred = pred,
+                           ind = ind)
   
   R2 = cor(obs, pred)^2
   sRMSE = rmse(obs, pred) / sd(obs)

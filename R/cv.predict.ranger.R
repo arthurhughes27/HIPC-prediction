@@ -135,6 +135,16 @@ cv.predict.ranger = function(df,
         fold.ids = inner.fold.ids
       )
       pred.selected = c(covariate.cols, feature.selection.res$pred.selected)
+    } else if (feature.selection == "variance"){
+      feature.selection.res = feature.selection.variance(
+        df = df.train,
+        response.col = response.col,
+        covariate.cols = covariate.cols,
+        predictor.cols = pred.names,
+        metric.threshold = feature.selection.metric.threshold,
+        criterion = feature.selection.criterion
+      )
+      pred.selected = c(covariate.cols, feature.selection.res$pred.selected)
     }
     
     # ---- Build fold-specific columns for metrics & selection ----------------
@@ -377,7 +387,7 @@ cv.predict.ranger = function(df,
   # -------------------------
   # Prediction plot and return
   # -------------------------
-  prediction.plot = cv.plot(pred = predictions$predicted, obs = predictions$observed)
+  prediction.plot = cv.plot(pred = predictions$predicted, obs = predictions$observed, ind = df$participant_id)
   
   results = list(
     predictions = predictions,

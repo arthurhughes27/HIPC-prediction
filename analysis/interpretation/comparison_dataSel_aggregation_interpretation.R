@@ -10,6 +10,9 @@ figures_folder = fs::path("output", "figures", "comparison")
 # Study of interest
 study_of_interest = "SDY1276"
 
+# Vaccine of interest
+vaccine_of_interest = "Influenza (IN)"
+
 # Dataset of interest
 dataset_of_interest = "all_noNorm"
 
@@ -19,8 +22,19 @@ assay_of_interest = "hai"
 # Model of interest
 model_of_interest = "elasticnet"
 
+# Gender of interest
+gender_of_interest = "none"
+
+# Feature engineering column of interest
+feature_engineering_col_of_interest = "none"
+
+# Metric of interest
+metric_of_interest = "R.spearman"
+
 file_name_male = paste0(
   "metrics_transformations_",
+  gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+  "_",
   dataset_of_interest,
   "_",
   study_of_interest,
@@ -33,6 +47,8 @@ file_name_male = paste0(
 
 file_name_female = paste0(
   "metrics_transformations_",
+  gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+  "_",
   dataset_of_interest,
   "_",
   study_of_interest,
@@ -43,23 +59,38 @@ file_name_female = paste0(
   ".rds"
 )
 
+file_name_none = paste0(
+  "metrics_transformations_",
+  gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+  "_",
+  dataset_of_interest,
+  "_",
+  study_of_interest,
+  "_",
+  assay_of_interest,
+  "_none_",
+  model_of_interest,
+  ".rds"
+)
+
 p_load_male <- fs::path(results_folder, file_name_male)
 p_load_female <- fs::path(results_folder, file_name_female)
+p_load_none <- fs::path(results_folder, file_name_none)
 
 # Read the results
 metrics_df_male = readRDS(p_load_male) %>% 
   mutate(gender.select = "Male")
 metrics_df_female = readRDS(p_load_female) %>% 
   mutate(gender.select = "Female")
+metrics_df_none = readRDS(p_load_none) %>% 
+  mutate(gender.select = "none")
 
-metrics_df = bind_rows(metrics_df_male, metrics_df_female)
+
+metrics_df = bind_rows(
+  bind_rows(metrics_df_male, metrics_df_female),
+  metrics_df_none)
 
 # Generate a figure comparing a given metric across data selections for a given model, gender, and column pre-transformation
-
-model_of_interest = "elasticnet"
-gender_of_interest = "Female"
-feature_engineering_col_of_interest = "none"
-metric_of_interest = "R2"
 
 # Tidy names for the plot 
 model_tidy = if (model_of_interest == "elasticnet"){
@@ -98,12 +129,17 @@ metric_tidy = if (metric_of_interest == "R2"){
   "RMSE"
 }
 
+vaccine_tidy = tolower(gsub("[^[:alnum:]]", "", vaccine_of_interest))
+
+metric_tidy <- gsub("\\.", "", metric_of_interest)
+
 levels_order <- c("d0","d1","d1fc","d3","d3fc")
 row_order <- c("mean", "median", "max", "iqr", "cv", "pc1", "ssgsea", "none")
 
 baseline_R2 <- metrics_df %>%
-  filter(data.selection == "baseline") %>%
-  pull(.data [[metric_of_interest]]) %>% .[1]
+  filter(data.selection == "baseline",
+         gender.select == gender_of_interest) %>%
+  pull(.data [[metric_of_interest]])
 
 df <- metrics_df %>%
   filter(data.selection %in% levels_order,
@@ -149,11 +185,17 @@ file_name = paste0(
   "_",
   study_of_interest,
   "_",
+  vaccine_tidy,
+  "_",
   assay_of_interest,
   "_",
   gender_of_interest,
   "_",
+  feature_engineering_col_of_interest,
+  "_",
   model_of_interest,
+  "_",
+  metric_of_interest,
   ".pdf"
 )
 

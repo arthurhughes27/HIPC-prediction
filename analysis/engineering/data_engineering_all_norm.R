@@ -148,7 +148,6 @@ compute_row_transformation = function(df,
     
     expr_mat_gs = expr_mat[, gs.genes, drop = FALSE]
     
-    # Remove all constant columns 
     expr_mat_gs <- expr_mat_gs[, apply(expr_mat_gs, 2, function(x) {
       x <- x[!is.na(x)]
       length(x) > 1 && length(unique(x)) > 1
@@ -157,11 +156,10 @@ compute_row_transformation = function(df,
     if (ncol(expr_mat_gs) == 0) {
       transformed <- rep(NA_real_, nrow(expr_mat_gs))
     } else if (transformation == "pc1") {
-      
+      # Remove all constant columns
       pca_res <- stats::prcomp(expr_mat_gs, center = TRUE, scale. = TRUE)
       transformed <- as.numeric(pca_res$x[, 1])
     } else {
-      
       transformed <- apply(expr_mat_gs,
                            1,
                            FUN = transformation_function,
@@ -236,6 +234,7 @@ apply_transformations = function(df,
 
 
 engineer_expression_data <- function(study_of_interest,
+                                     vaccine_of_interest,
                                      timepoints_of_interest,
                                      processed_data_folder = "data") {
   # Paths to processed gene-level data and gene-set objects
@@ -253,15 +252,18 @@ engineer_expression_data <- function(study_of_interest,
   BTM[["geneset.aggregates"]] = BTM[["geneset.aggregates"]][-idx]
   BTM[["geneset.names.descriptions"]] = BTM[["geneset.names.descriptions"]][-idx]
   
-  # Filter to samples with non-missing immune response, Influenza vaccine,
-  # and collected at one of the specified timepoints.
+  # Filter to samples with non-missing immune response, vaccine,
+  # and collected at all of the specified timepoints.
   hipc_merged_all_norm_filtered <- hipc_merged_all_norm %>%
     filter(
       !is.na(immResp_MFC_anyAssay_log2_MFC),
-      vaccine_name == "Influenza (IN)",
+      vaccine_name == vaccine_of_interest,
       study_time_collected %in% timepoints_of_interest,
       study_accession %in% study_of_interest
-    )
+    ) %>%
+    group_by(participant_id) %>%
+    filter(n_distinct(study_time_collected) == length(timepoints_of_interest)) %>%
+    ungroup()
   
   gene_names <- hipc_merged_all_norm_filtered %>%
     dplyr::select(a1cf:zzz3) %>%
@@ -353,11 +355,43 @@ engineer_expression_data <- function(study_of_interest,
     }
   }
   
+  # -------------------------------------------------------
+  # Keep only participants present in ALL engineered tables
+  # -------------------------------------------------------
+  
+  # collect participant sets
+  id_sets <- list()
+  for (top_name in names(engineered)) {
+    for (col_tf in names(engineered[[top_name]])) {
+      for (row_tf in names(engineered[[top_name]][[col_tf]])) {
+        id_sets[[length(id_sets) + 1]] <-
+          engineered[[top_name]][[col_tf]][[row_tf]]$participant_id
+      }
+    }
+  }
+  
+  # intersection
+  common_ids <- Reduce(intersect, id_sets)
+  
+  # filter every dataframe
+  for (top_name in names(engineered)) {
+    for (col_tf in names(engineered[[top_name]])) {
+      for (row_tf in names(engineered[[top_name]][[col_tf]])) {
+        engineered[[top_name]][[col_tf]][[row_tf]] <-
+          engineered[[top_name]][[col_tf]][[row_tf]] %>%
+          dplyr::filter(participant_id %in% common_ids) %>%
+          dplyr::arrange(participant_id)
+      }
+    }
+  }
+  
   
   p_save <- fs::path(
     processed_data_folder,
     paste0(
-      "engineered_dataframes_influenzain_all_norm_",
+      "engineered_dataframes_",
+      gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+      "_all_norm_",
       paste(study_of_interest, collapse = "_"),
       ".rds"
     )
@@ -367,10 +401,13 @@ engineer_expression_data <- function(study_of_interest,
   saveRDS(engineered, p_save)
   
   invisible(engineered)
+  
+  # return(engineered)
 }
 
 engineer_expression_data(
   study_of_interest = "SDY1276",
+  vaccine_of_interest = "Influenza (IN)",
   timepoints_of_interest = c(0, 1, 3),
   processed_data_folder = "data"
 )
