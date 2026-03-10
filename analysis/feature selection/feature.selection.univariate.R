@@ -10,7 +10,7 @@ processed_data_folder <- "data"
 # Output folder to save results
 output_folder = fs::path("output", "results")
 
-study_of_interest = "SDY80"
+study_of_interest = "SDY1276"
 # Path for predictor sets
 df.predictor.list.path = fs::path(processed_data_folder,
                                   paste0("engineered_dataframes_influenzain_all_noNorm_",study_of_interest,".rds"))

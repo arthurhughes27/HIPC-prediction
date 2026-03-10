@@ -2,7 +2,11 @@ balance_folds <- function(df,
                           ind.col,
                           covariate.cols,
                           n.folds = 10,
-                          n.continuous.split = 5) {
+                          n.continuous.split = 5,
+                          seed = 123) {
+  
+  set.seed(seed)
+  
   # df: one row per individual
   # ind.col: column name of participant identifier
   # covariate.cols: character vector of covariates to balance on
@@ -55,7 +59,7 @@ balance_folds <- function(df,
     fold_map[shuffled] <- ((seq_along(shuffled) - 1) %% n.folds) + 1
   }
   
-  res = data.frame(participant = participants, fold = fold_map)
+  res = data.frame(participant_id = participants, fold = fold_map)
   
   return(res)
 }

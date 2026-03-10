@@ -96,7 +96,7 @@ feature.selection.univariate = function(df,
         if (include.covariates) {
           train.df <- df[train.idx, c(response.col, pred, covariate.cols), drop = FALSE]
           test.df  <- df[test.idx, c(pred, covariate.cols), drop = FALSE]
-          
+          metric
           rhs.cols <- c(pred, covariate.cols)
           rhs.cols <- paste0("`", rhs.cols, "`")  # backticks for formula
           
@@ -152,6 +152,11 @@ feature.selection.univariate = function(df,
   
   
   if (criterion == "threshold") {
+    pred.res = pred.res %>% 
+      mutate(baseline.metric = pred.res.baseline,
+             selected = ifelse(pred %in% pred.selected, TRUE, FALSE)) %>% 
+      dplyr::select(pred, baseline.metric, metric, selected)
+    
     # Select predictors based on threshold
     if (metric %in% c("sRMSE", "RMSE")) {
       # Lower sRMSE is better
@@ -164,13 +169,24 @@ feature.selection.univariate = function(df,
         filter(metric > metric.threshold) %>%
         pull(pred)
     }
-  } else if (criterion == "relative.gain") {
-    if (metric %in% c("sRMSE", "RMSE")) {
-      pred.res = pred.res %>%
-        mutate(relative.gain = 100 * (pred.res.baseline - metric) / pred.res.baseline)
-    } else {
-      pred.res = pred.res %>%
-        mutate(relative.gain = -100 * (pred.res.baseline - metric) / pred.res.baseline)
+  } else if (criterion %in% c("relative.gain", "relative.gain.absolute")) {
+    
+    if (criterion == "relative.gain") {
+      if (metric %in% c("sRMSE", "RMSE")) {
+        pred.res = pred.res %>%
+          mutate(relative.gain = 100 * (pred.res.baseline - metric) / pred.res.baseline)
+      } else {
+        pred.res = pred.res %>%
+          mutate(relative.gain = -100 * (pred.res.baseline - metric) / pred.res.baseline)
+      }
+    } else if (criterion == "relative.gain.absolute") {
+      if (metric %in% c("sRMSE", "RMSE")) {
+        pred.res = pred.res %>%
+          mutate(relative.gain = pred.res.baseline - metric)
+      } else {
+        pred.res = pred.res %>%
+          mutate(relative.gain = pred.res.baseline - metric)
+      }
     }
     
     pred.selected <- pred.res %>%
@@ -178,7 +194,11 @@ feature.selection.univariate = function(df,
       pull(pred)
     
     pred.res = pred.res %>%
-      mutate(metric.base = metric, metric = relative.gain)
+      mutate(metric.original = metric,
+             baseline.metric.original = pred.res.baseline,
+             selected = ifelse(pred %in% pred.selected, TRUE, FALSE)) %>%
+      mutate(metric = relative.gain) %>%
+      dplyr::select(pred, baseline.metric.original, metric.original, metric, selected)
   }
   
   
