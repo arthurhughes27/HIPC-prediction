@@ -9,7 +9,7 @@ feature.selection.univariate = function(df,
                                         metric.threshold = 1,
                                         include.covariates = TRUE,
                                         n.folds = 5,
-                                        fold.ids) {
+                                        fold.ids = NULL) {
   n <- nrow(df)          # Number of observations
   p <- length(predictor.cols) # Number of candidate predictors
   

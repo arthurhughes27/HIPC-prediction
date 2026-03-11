@@ -1,4 +1,4 @@
-for (assay_of_interest in c("nAb", "hai")) {
+for (assay_of_interest in c("nAb")) {
   for (gender_of_interest in c("none", "Male", "Female")) {
     for (model_of_interest in c("elasticnet")) {
       # R script to perform prediction on a given study dataset and compare data selection and geneset aggregation approaches
@@ -222,7 +222,7 @@ for (assay_of_interest in c("nAb", "hai")) {
       
       for (data.sel in names(df.predictor.list)) {
         for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
-          for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])) {
+          for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])[-1]) {
             # Print a progress message
             message(
               sprintf(
@@ -285,10 +285,10 @@ for (assay_of_interest in c("nAb", "hai")) {
               feature.engineering.col = feat.eng.col,
               feature.engineering.row = feat.eng.row,
               feature.selection = "none",
-              feature.selection.metric = feature.selection.metric,
-              feature.selection.metric.threshold = feature.selection.metric.threshold,
-              feature.selection.model = feature.selection.model,
-              feature.selection.criterion = feature.selection.criterion,
+              feature.selection.metric = "none",
+              feature.selection.metric.threshold = "none",
+              feature.selection.model = "none",
+              feature.selection.criterion = "none",
               model = model_of_interest,
               fold.ids = fold.ids,
               seed = seed,
