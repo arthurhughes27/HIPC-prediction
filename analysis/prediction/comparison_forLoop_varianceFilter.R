@@ -1,4 +1,4 @@
-for (assay_of_interest in c("nAb")) {
+for (assay_of_interest in c("nAb", "hai")) {
   for (gender_of_interest in c("none", "Male", "Female")) {
     for (model_of_interest in c("elasticnet")) {
       # R script to perform prediction on a given study dataset and compare data selection and geneset aggregation approaches
