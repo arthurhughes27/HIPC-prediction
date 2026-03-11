@@ -1,6 +1,6 @@
 for (assay_of_interest in c("nAb", "hai")) {
-  for (gender_of_interest in c("none")) {
-    for (model_of_interest in c("lm")) {
+  for (gender_of_interest in c("none", "Male", "Female")) {
+    for (model_of_interest in c("elasticnet")) {
       # R script to perform prediction on a given study dataset and compare data selection and geneset aggregation approaches
       # Libraries
       
@@ -25,7 +25,7 @@ for (assay_of_interest in c("nAb", "hai")) {
       output_folder = fs::path("output", "results")
       
       # Figures folder to store graphics
-      figures_folder = fs::path("output", "figures", "feature selection")
+      figures_folder = fs::path("output", "figures", "diagnosis")
       
       # Study of interest
       study_of_interest = "SDY1276"
@@ -84,7 +84,7 @@ for (assay_of_interest in c("nAb", "hai")) {
         mutate(
           ethnicityHisp = ifelse(ethnicity == "Hispanic or Latino", 1, 0),
           ethnicityOther = ifelse(ethnicity == "Other", 1, 0)
-        ) %>%
+        ) %>% 
         filter(study_accession == study_of_interest)
       
       # Define the response variable to predict
@@ -125,6 +125,23 @@ for (assay_of_interest in c("nAb", "hai")) {
       # Number of folds
       K <- 10
       
+      # Get concerned participants
+      pid_df <- df.clinical.full %>%
+        filter(participant_id %in% ids) %>%  # ensure same set
+        distinct(participant_id, !!rlang::sym(response.col), .keep_all = TRUE)
+      
+      # Generate folds with internal function balanced on covariates and response
+      
+      fold_df = balance_folds(
+        df = pid_df,
+        ind.col = "participant_id",
+        covariate.cols = c(response.col),
+        n.folds = K,
+        n.continuous.split = 5
+      )
+      
+      fold.ids = fold_df$fold
+      
       # Calculate total number of iterations to do
       total.combinations = length(names(df.predictor.list)) * length(names(df.predictor.list[["d0"]][["none"]])) * length(names(df.predictor.list[["d0"]]))
       
@@ -137,7 +154,7 @@ for (assay_of_interest in c("nAb", "hai")) {
       # feat.eng.col = "none"
       
       # Fix the feature selection parameters
-      feature.selection = "univariate"
+      feature.selection = "variance"
       feature.selection.metric = "R.spearman"
       feature.selection.metric.threshold = 0
       feature.selection.model = "lm"
@@ -147,7 +164,7 @@ for (assay_of_interest in c("nAb", "hai")) {
       seed = 10022026
       
       file_name = paste0(
-        "feature_selection_",
+        "metrics_transformations_",
         gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
         "_",
         dataset_of_interest,
@@ -159,7 +176,7 @@ for (assay_of_interest in c("nAb", "hai")) {
         gender_of_interest,
         "_",
         model_of_interest,
-        ".rds"
+        "_varianceFiltration.rds"
       )
       
       p_save <- fs::path(output_folder, file_name)
@@ -181,8 +198,10 @@ for (assay_of_interest in c("nAb", "hai")) {
       }
       
       # Recompute participant IDs after filtering
-      ids <- intersect(df.predictor.list[["d0"]][["none"]][["none"]] %>% pull(participant_id),
-                       df.clinical$participant_id)
+      ids <- intersect(
+        df.predictor.list[["d0"]][["none"]][["none"]] %>% pull(participant_id),
+        df.clinical$participant_id
+      )
       
       # Subset clinical data for those IDs and remove duplicates
       pid_df <- df.clinical %>%
@@ -203,7 +222,7 @@ for (assay_of_interest in c("nAb", "hai")) {
       
       for (data.sel in names(df.predictor.list)) {
         for (feat.eng.col in names(df.predictor.list[[data.sel]])) {
-          for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])[-1]) {
+          for (feat.eng.row in names(df.predictor.list[[data.sel]][[feat.eng.col]])) {
             # Print a progress message
             message(
               sprintf(
@@ -217,6 +236,8 @@ for (assay_of_interest in c("nAb", "hai")) {
               )
             )
             in.time = Sys.time()
+            
+            # Perform variable selection on the entire dataset 
             
             df_temp = df.predictor.list[[data.sel]][[feat.eng.col]][[feat.eng.row]]
             
@@ -241,18 +262,38 @@ for (assay_of_interest in c("nAb", "hai")) {
               ))) %>%
               colnames()
             
-            # Cross-validation
-            res = feature.selection.univariate(
+            # Cross-validation for variable selection
+            res = feature.selection.variance(
               df = df_pred,
               response.col = response.col,
               covariate.cols = covariate.cols,
               predictor.cols = predictor.cols,
-              model = "lm",
-              metric = "R.spearman",
-              criterion = "relative.gain",
-              metric.threshold = 0,
-              include.covariates = TRUE,
-              fold.ids = fold.ids
+              criterion = "topN",
+              metric.threshold = 100
+            )
+            
+            preds_selected = res$pred.selected
+            
+            # Cross-validation
+            res = cv.predict(
+              df.predictor.list = df.predictor.list,
+              df.clinical = df.clinical,
+              predictor.cols = preds_selected,
+              covariate.cols = covariate.cols,
+              response.col = response.col,
+              data.selection = data.sel,
+              feature.engineering.col = feat.eng.col,
+              feature.engineering.row = feat.eng.row,
+              feature.selection = "none",
+              feature.selection.metric = feature.selection.metric,
+              feature.selection.metric.threshold = feature.selection.metric.threshold,
+              feature.selection.model = feature.selection.model,
+              feature.selection.criterion = feature.selection.criterion,
+              model = model_of_interest,
+              fold.ids = fold.ids,
+              seed = seed,
+              n.cores = 10,
+              gender.select = gender_of_interest
             )
             
             out.time = Sys.time()
@@ -261,16 +302,14 @@ for (assay_of_interest in c("nAb", "hai")) {
             
             message(sprintf("Completed in %.1f mins.", diff.time))
             
-            res_list = list("data.sel" = data.sel,
-                            "feat.eng.col" = feat.eng.col,
-                            "feat.eng.row" = feat.eng.row, 
-                            "pred.res" = res[["pred.results"]])
-            
             
             # Store the metrics
-            res.list[[i]] <- res_list
+            res.list[[i]] <- res[["metrics"]]
             # Iterate the counter
             i <- i + 1
+            
+            print(res[["metrics"]]$R.spearman)
+            print(res$prediction.plot)
             
             # Clear the temporary memory
             gc()
@@ -278,11 +317,55 @@ for (assay_of_interest in c("nAb", "hai")) {
         }
       }
       
+      # Bind the metrics into a dataframe
+      metrics.df <- bind_rows(res.list)
+      
+      # Derive baseline results with just clinical information
+      df = df.clinical %>%
+        filter(participant_id %in% ids) %>%
+        select(participant_id,
+               all_of(covariate.cols),
+               all_of(response.col)) %>%
+        distinct()
+      
+      # Compute the cross-validation results
+      for (mod in c("lm")) {
+        baseline_results = cv.predict.baseline(
+          df = df,
+          predictor.cols = covariate.cols,
+          response.col = response.col,
+          model = mod,
+          fold.ids = fold.ids,
+          seed = seed,
+          n.folds = NULL,
+          gender.select = gender_of_interest
+        )
+        
+        # Bind the baseline results to the metrics
+        metrics.df = bind_rows(metrics.df, baseline_results$metrics)
+      }
+      
+      metrics.df = metrics.df %>%
+        arrange(desc(R2))
+      
       # Save the results
-      saveRDS(res.list, p_save)
+      saveRDS(metrics.df, p_save)
+      
+      rm(
+        df.predictor.list,
+        df.clinical,
+        fold_df,
+        metrics.df,
+        res.list,
+        baseline_results
+      )
       
       gc()
       
     }
   }
 }
+
+rm(list = ls())
+
+gc()

@@ -194,7 +194,7 @@ antibody.values <- Wilcoxon.filtered$`Antibody Value`
 rm(list = c("Wilcoxon.filtered"))
 
 
-# Bootstrapping for variable selection
+# Bootstrapping for feature selection
 # Designate parameters
 n_bootstraps <- 10
 ncomp.grid <- 1:5

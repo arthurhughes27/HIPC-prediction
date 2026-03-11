@@ -59,7 +59,7 @@ cv.predict.xgboost = function(df,
   }
   # -------------------------------
   
-  # Container for variable selection
+  # Container for feature selection
   feature_table <- data.frame(pred = pred.names.feature.selection, stringsAsFactors = FALSE)
   
   # Outer CV loop

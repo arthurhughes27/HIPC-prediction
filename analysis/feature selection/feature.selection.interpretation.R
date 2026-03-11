@@ -7,38 +7,96 @@ library(tidytext)   # reorder_within(), scale_y_reordered()
 library(stringr)    # str_wrap()
 
 output_folder = fs::path("output", "results")
-vi_figures_folder = fs::path("output", "figures", "variable selection")
-p_load <- fs::path(output_folder, "feature.selection.lm.mean.all.rds")
-# Save the results
+vi_figures_folder = fs::path("output", "figures", "feature selection")
+
+dataset_of_interest = "all_noNorm"
+
+vaccine_of_interest = "Influenza (IN)"
+
+study_of_interest = "SDY1276"
+
+assay_of_interest = "nAb"
+
+gender_of_interest = "none"
+
+model_of_interest = "lm"
+
+metric_of_interest = "R.spearman"
+
+
+file_name = paste0(
+  "feature_selection_",
+  gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+  "_",
+  dataset_of_interest,
+  "_",
+  study_of_interest,
+  "_",
+  assay_of_interest,
+  "_",
+  gender_of_interest,
+  "_",
+  model_of_interest,
+  ".rds"
+)
+
+p_load <- fs::path(output_folder, file_name)
+
+# Load the results
 res = readRDS(p_load)
+
+extract_pred_res <- function(res,
+                             data.sel = NULL,
+                             feat.eng.col = NULL,
+                             feat.eng.row = NULL) {
+  
+  res %>%
+    keep(~ (is.null(data.sel)     || .x$data.sel %in% data.sel) &
+           (is.null(feat.eng.col) || .x$feat.eng.col %in% feat.eng.col) &
+           (is.null(feat.eng.row) || .x$feat.eng.row %in% feat.eng.row)) %>%
+    
+    map_dfr(~ .x$pred.res %>%
+              mutate(
+                data.sel = .x$data.sel,
+                feat.eng.col = .x$feat.eng.col,
+                feat.eng.row = .x$feat.eng.row
+              ))
+}
+
+df <- extract_pred_res(
+  res,
+  data.sel = c("d0", "d1", "d3"),
+  feat.eng.col = "none",
+  feat.eng.row = "mean"
+)
 
 # =========================
 # Parameters
 # =========================
-top.n <- 25
-plot_title <- "Top predictors by data selection"
-wrap_width <- 25    # number of characters per line for predictor names
+top.n <- 15
+plot_title <- "Top predictors by timepoint"
+wrap_width <- 25    # number of characters per line for pred names
 
 # =========================
 # Prepare data
 # =========================
-res_top <- res %>%
-  group_by(data.selection) %>%
+res_top <- df %>%
+  group_by(data.sel) %>%
   slice_max(order_by = metric, n = top.n, with_ties = FALSE) %>%
   ungroup() %>%
   mutate(
     # map fold-change labels to the same day-group for colouring
     day_group = case_when(
-      data.selection == "d0"               ~ "d0",
-      data.selection %in% c("d1", "d1fc")  ~ "d1",
-      data.selection %in% c("d3", "d3fc")  ~ "d3",
-      TRUE                                 ~ as.character(data.selection)
+      data.sel == "d0"               ~ "d0",
+      data.sel %in% c("d1", "d1fc")  ~ "d1",
+      data.sel %in% c("d3", "d3fc")  ~ "d3",
+      TRUE                                 ~ as.character(data.sel)
     ),
-    # wrap predictor names for readability
-    predictor_label = str_wrap(predictor, width = wrap_width),
+    # wrap pred names for readability
+    predictor_label = str_wrap(pred, width = wrap_width),
     # reorder predictors within each facet by metric
     predictor_reordered = reorder_within(
-      predictor_label, metric, data.selection
+      predictor_label, metric, data.sel
     )
   )
 
@@ -74,7 +132,7 @@ p <- ggplot(res_top, aes(x = metric, y = predictor_reordered, fill = day_group))
     colour = "black"
   ) +
   facet_wrap(
-    ~ data.selection,
+    ~ data.sel,
     scales = "free_y",
     nrow = 1
   ) +
@@ -83,7 +141,7 @@ p <- ggplot(res_top, aes(x = metric, y = predictor_reordered, fill = day_group))
   coord_cartesian(xlim = c(x_min - pad, x_max + pad)) +
   labs(
     title = plot_title,
-    x = "Relative Percent Gain in sRMSE",
+    x = paste0("Relative Percent Gain in ", metric_of_interest),
     y = NULL
   ) +
   theme_minimal(base_size = 16) +
@@ -104,12 +162,28 @@ p <- ggplot(res_top, aes(x = metric, y = predictor_reordered, fill = day_group))
 # =========================
 print(p)
 
+file_name_figure = paste0(
+  "feature_selection_",
+  gsub("[[:space:]()]", "", tolower(vaccine_of_interest)),
+  "_",
+  dataset_of_interest,
+  "_",
+  study_of_interest,
+  "_",
+  assay_of_interest,
+  "_",
+  gender_of_interest,
+  "_",
+  model_of_interest,
+  ".pdf"
+)
+
 ggsave(
-  filename = "varImp_univariate.pdf",
+  filename = file_name_figure,
   path = vi_figures_folder,
   plot = p,
   width = 45,
-  height = 40,
+  height = 30,
   units = "cm"
 )
 

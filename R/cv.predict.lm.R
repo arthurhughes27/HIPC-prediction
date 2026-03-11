@@ -47,7 +47,7 @@ cv.predict.lm = function(df,
   var.imp <- matrix(NA_real_, nrow = p, ncol = n.folds)
   rownames(var.imp) <- pred.names
   
-  # Container for variable selection
+  # Container for feature selection
   feature_table <- data.frame(pred = pred.names.feature.selection, stringsAsFactors = FALSE)
   
   # Outer cross-validation loop

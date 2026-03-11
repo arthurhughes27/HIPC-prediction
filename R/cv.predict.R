@@ -2,6 +2,7 @@
 
 cv.predict = function(df.predictor.list,
                       df.clinical,
+                      predictor.cols = NULL,
                       covariate.cols,
                       response.col,
                       data.selection = "d0",
@@ -39,21 +40,32 @@ cv.predict = function(df.predictor.list,
       dplyr::select(-any_of("study_time_collected"))
     
     # Select relevant columns from the clinical data
-    if (include.covariates){
+    if (include.covariates) {
       df.clinical = df.clinical %>%
         select(participant_id,
                all_of(covariate.cols),
                all_of(response.col))
     } else {
       df.clinical = df.clinical %>%
-        select(participant_id,
-               all_of(response.col))
+        select(participant_id, all_of(response.col))
     }
     
     # Merge these into one dataframe
     df.all = inner_join(x = df.clinical, y = df.predictors, by = "participant_id") %>%
       distinct() %>%
       drop_na()
+    
+    if (!is.null(predictor.cols)) {
+      df.all = df.all %>%
+        dplyr::select(all_of(
+          c(
+            "participant_id",
+            response.col,
+            covariate.cols,
+            predictor.cols
+          )
+        ))
+    }
     
   } else {
     pids_to_retain = df.predictor.list[[1]][[1]][[1]] %>%
